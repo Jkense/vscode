@@ -10,41 +10,60 @@ import { spawn } from '@malept/cross-spawn-promise';
 const root = path.dirname(path.dirname(import.meta.dirname));
 const product = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'));
 
-interface DmgBuildSettings {
-	title: string;
-	icon?: string | null;
-	'badge-icon'?: string | null;
-	background?: string;
-	'background-color'?: string;
-	'icon-size'?: number;
-	'text-size'?: number;
-	format?: string;
-	window?: {
-		position?: { x: number; y: number };
-		size?: { width: number; height: number };
-	};
-	contents: Array<{
-		path: string;
-		x: number;
-		y: number;
-		type: 'file' | 'link';
-		name?: string;
-	}>;
+const DMGBUILD_REPO = 'https://github.com/dmgbuild/dmgbuild.git';
+const DMGBUILD_COMMIT = '75c8a6c7835c5b73dfd4510d92a8f357f93a5fbf';
+
+function getDmgBuildPath(): string {
+	return path.join(import.meta.dirname, '.dmgbuild');
 }
 
-function getDmgBuilderPath(): string {
-	return path.join(import.meta.dirname, '..', 'node_modules', 'dmg-builder');
+function getVenvPath(): string {
+	return path.join(getDmgBuildPath(), 'venv');
 }
 
-function getDmgBuilderVendorPath(): string {
-	return path.join(getDmgBuilderPath(), 'vendor');
+function getPythonPath(): string {
+	return path.join(getVenvPath(), 'bin', 'python3');
+}
+
+async function ensureDmgBuild(): Promise<void> {
+	const dmgBuildPath = getDmgBuildPath();
+	const venvPath = getVenvPath();
+	const markerFile = path.join(dmgBuildPath, '.installed');
+	if (fs.existsSync(markerFile)) {
+		console.log('dmgbuild already installed, skipping setup');
+		return;
+	}
+
+	console.log('Setting up dmgbuild from GitHub...');
+	if (fs.existsSync(dmgBuildPath)) {
+		fs.rmSync(dmgBuildPath, { recursive: true });
+	}
+
+	console.log(`Cloning dmgbuild from ${DMGBUILD_REPO} at ${DMGBUILD_COMMIT}...`);
+	await spawn('git', ['clone', '--depth', '1', '--branch', DMGBUILD_COMMIT, DMGBUILD_REPO, dmgBuildPath], {
+		stdio: 'inherit'
+	});
+
+	console.log('Creating Python virtual environment...');
+	await spawn('python3', ['-m', 'venv', venvPath], {
+		stdio: 'inherit'
+	});
+
+	console.log('Installing dmgbuild dependencies...');
+	const pipPath = path.join(venvPath, 'bin', 'pip');
+	await spawn(pipPath, ['install', '-e', dmgBuildPath], {
+		stdio: 'inherit'
+	});
+
+	fs.writeFileSync(markerFile, `Installed at ${new Date().toISOString()}\nCommit: ${DMGBUILD_COMMIT}\n`);
+	console.log('dmgbuild setup complete');
 }
 
 async function runDmgBuild(settingsFile: string, volumeName: string, artifactPath: string): Promise<void> {
-	const vendorDir = getDmgBuilderVendorPath();
-	const scriptPath = path.join(vendorDir, 'run_dmgbuild.py');
-	await spawn('python3', [scriptPath, '-s', settingsFile, volumeName, artifactPath], {
-		cwd: vendorDir,
+	await ensureDmgBuild();
+
+	const pythonPath = getPythonPath();
+	await spawn(pythonPath, ['-m', 'dmgbuild', '-s', settingsFile, volumeName, artifactPath], {
 		stdio: 'inherit'
 	});
 }
@@ -98,34 +117,46 @@ async function main(buildDir?: string, outDir?: string): Promise<void> {
 		fs.unlinkSync(artifactPath);
 	}
 
-	const settings: DmgBuildSettings = {
-		title,
-		'badge-icon': diskIconPath,
-		background: backgroundPath,
-		format: 'ULMO',
-		'text-size': 12,
-		window: {
-			position: { x: 100, y: 400 },
-			size: { width: 480, height: 352 }
-		},
-		contents: [
-			{
-				path: appPath,
-				x: 120,
-				y: 160,
-				type: 'file'
-			},
-			{
-				path: '/Applications',
-				x: 360,
-				y: 160,
-				type: 'link'
-			}
-		]
-	};
+	// Generate Python settings file for dmgbuild
+	const settingsFile = path.join(outDir, '.dmg-settings.py');
+	const settingsContent = `
+volume_name = ${JSON.stringify(title)}
+format = 'ULMO'
+badge_icon = ${JSON.stringify(diskIconPath)}
+background = ${JSON.stringify(backgroundPath)}
 
-	const settingsFile = path.join(outDir, '.dmg-settings.json');
-	fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+# Volume size (None = auto-calculate)
+size = None
+
+# Files and symlinks
+files = [${JSON.stringify(appPath)}]
+symlinks = {
+	'Applications': '/Applications'
+}
+
+# Window settings
+show_status_bar = False
+show_tab_view = False
+show_toolbar = False
+show_pathbar = False
+show_sidebar = False
+sidebar_width = 180
+
+# Window position and size
+window_rect = ((100, 400), (480, 352))
+
+# Icon view settings
+default_view = 'icon-view'
+icon_locations = {
+	${JSON.stringify(product.nameLong + '.app')}: (120, 160),
+	'Applications': (360, 160)
+}
+
+# Text size for icon labels
+text_size = 12
+icon_size = 80
+`;
+	fs.writeFileSync(settingsFile, settingsContent);
 
 	try {
 		await runDmgBuild(settingsFile, dmgName, artifactPath);
