@@ -131,7 +131,7 @@ size = None
 # Files and symlinks
 files = [${JSON.stringify(appPath)}]
 symlinks = {
-	'Applications': '/Applications'
+    'Applications': '/Applications'
 }
 
 # Window settings
