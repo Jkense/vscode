@@ -40,7 +40,10 @@ async function ensureDmgBuild(): Promise<void> {
 	}
 
 	console.log(`Cloning dmgbuild from ${DMGBUILD_REPO} at ${DMGBUILD_COMMIT}...`);
-	await spawn('git', ['clone', '--depth', '1', '--branch', DMGBUILD_COMMIT, DMGBUILD_REPO, dmgBuildPath], {
+	await spawn('git', ['clone', DMGBUILD_REPO, dmgBuildPath], {
+		stdio: 'inherit'
+	});
+	await spawn('git', ['-C', dmgBuildPath, 'checkout', DMGBUILD_COMMIT], {
 		stdio: 'inherit'
 	});
 
