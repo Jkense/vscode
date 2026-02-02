@@ -76,9 +76,7 @@ export class UrlFinder extends Disposable {
 
 	private registerTerminalInstance(instance: ITerminalInstance) {
 		if (!UrlFinder.excludeTerminals.includes(instance.title)) {
-			// Use onLineData instead of onData to only process terminal output,
-			// not user input. This prevents detecting URLs as the user types.
-			this.listeners.set(instance, instance.onLineData(data => {
+			this.listeners.set(instance, instance.onData(data => {
 				this.getOrCreateWorker(instance).work(data);
 			}));
 		}

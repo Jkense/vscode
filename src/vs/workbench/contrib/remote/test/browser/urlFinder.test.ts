@@ -16,16 +16,16 @@ const DEBOUNCE_WAIT_MS = 600;
 
 // Mock implementations for testing
 class MockTerminalInstance implements IDisposable {
-	private readonly _onLineData = new Emitter<string>();
-	readonly onLineData = this._onLineData.event;
+	private readonly _onData = new Emitter<string>();
+	readonly onData = this._onData.event;
 	readonly title = 'test-terminal';
 
-	fireLineData(data: string): void {
-		this._onLineData.fire(data);
+	fireData(data: string): void {
+		this._onData.fire(data);
 	}
 
 	dispose(): void {
-		this._onLineData.dispose();
+		this._onData.dispose();
 	}
 }
 
@@ -63,8 +63,8 @@ suite('UrlFinder', () => {
 		store.add(urlFinder.onDidMatchLocalUrl((url: { host: string; port: number }) => matchedUrls.push(url)));
 
 		// Fire data events rapidly - data is accumulated and processed together after debounce
-		mockInstance.fireLineData('http://localhost:3000/\n');
-		mockInstance.fireLineData('http://127.0.0.1:8080/\n');
+		mockInstance.fireData('http://localhost:3000/\n');
+		mockInstance.fireData('http://127.0.0.1:8080/\n');
 
 		// Initially, no matches should be processed (debounced)
 		assert.strictEqual(matchedUrls.length, 0, 'URLs should not be processed immediately');
@@ -92,12 +92,12 @@ suite('UrlFinder', () => {
 		store.add(urlFinder.onDidMatchLocalUrl((url: { host: string; port: number }) => matchedUrls.push(url)));
 
 		// Fire a valid URL
-		mockInstance.fireLineData('http://localhost:3000/');
+		mockInstance.fireData('http://localhost:3000/');
 
 		// Then flood with lots of data (simulating high-throughput like games)
 		// Generate 10001 characters to exceed the 10000 character threshold (uses > comparison)
 		const largeData = 'x'.repeat(10001);
-		mockInstance.fireLineData(largeData);
+		mockInstance.fireData(largeData);
 
 		// Wait for debounce timeout
 		await new Promise(resolve => setTimeout(resolve, DEBOUNCE_WAIT_MS));
@@ -117,7 +117,7 @@ suite('UrlFinder', () => {
 		const matchedUrls: { host: string; port: number }[] = [];
 		store.add(urlFinder.onDidMatchLocalUrl((url: { host: string; port: number }) => matchedUrls.push(url)));
 
-		mockInstance.fireLineData('Server running at http://localhost:3000/');
+		mockInstance.fireData('Server running at http://localhost:3000/');
 
 		// Wait for debounce timeout
 		await new Promise(resolve => setTimeout(resolve, DEBOUNCE_WAIT_MS));
@@ -138,7 +138,7 @@ suite('UrlFinder', () => {
 		const matchedUrls: { host: string; port: number }[] = [];
 		store.add(urlFinder.onDidMatchLocalUrl((url: { host: string; port: number }) => matchedUrls.push(url)));
 
-		mockInstance.fireLineData('https://127.0.0.1:5001/api');
+		mockInstance.fireData('https://127.0.0.1:5001/api');
 
 		// Wait for debounce timeout
 		await new Promise(resolve => setTimeout(resolve, DEBOUNCE_WAIT_MS));
@@ -159,7 +159,7 @@ suite('UrlFinder', () => {
 		const matchedUrls: { host: string; port: number }[] = [];
 		store.add(urlFinder.onDidMatchLocalUrl((url: { host: string; port: number }) => matchedUrls.push(url)));
 
-		mockInstance.fireLineData('http://0.0.0.0:4000');
+		mockInstance.fireData('http://0.0.0.0:4000');
 
 		// Wait for debounce timeout
 		await new Promise(resolve => setTimeout(resolve, DEBOUNCE_WAIT_MS));
