@@ -33,9 +33,25 @@ export class UrlFinder extends Disposable {
 	 */
 	private static readonly maxDataLength = 2000;
 
+	/**
+	 * Rate limiting: maximum number of data events to process per time window.
+	 * When exceeded, URL detection is paused until the window resets.
+	 */
+	private static readonly maxEventsPerWindow = 50;
+
+	/**
+	 * Rate limiting: time window in milliseconds for counting events.
+	 */
+	private static readonly eventWindowMs = 1000;
+
 	private _onDidMatchLocalUrl: Emitter<{ host: string; port: number }> = new Emitter();
 	public readonly onDidMatchLocalUrl = this._onDidMatchLocalUrl.event;
 	private listeners: Map<ITerminalInstance | string, IDisposable> = new Map();
+
+	/**
+	 * Rate limiting state: tracks event count per terminal instance.
+	 */
+	private eventCounts: Map<ITerminalInstance, { count: number; windowStart: number }> = new Map();
 
 	constructor(terminalService: ITerminalService, debugService: IDebugService) {
 		super();
@@ -49,6 +65,7 @@ export class UrlFinder extends Disposable {
 		this._register(terminalService.onDidDisposeInstance(instance => {
 			this.listeners.get(instance)?.dispose();
 			this.listeners.delete(instance);
+			this.eventCounts.delete(instance);
 		}));
 
 		// Debug
@@ -70,9 +87,35 @@ export class UrlFinder extends Disposable {
 	private registerTerminalInstance(instance: ITerminalInstance) {
 		if (!UrlFinder.excludeTerminals.includes(instance.title)) {
 			this.listeners.set(instance, instance.onData(data => {
-				this.processData(data);
+				if (this.shouldProcessData(instance)) {
+					this.processData(data);
+				}
 			}));
 		}
+	}
+
+	/**
+	 * Rate limiting check: returns true if we should process data for this terminal.
+	 * Tracks event count per terminal and skips processing if rate is too high.
+	 */
+	private shouldProcessData(instance: ITerminalInstance): boolean {
+		const now = Date.now();
+		let state = this.eventCounts.get(instance);
+
+		if (!state || (now - state.windowStart) >= UrlFinder.eventWindowMs) {
+			// Start new window
+			state = { count: 1, windowStart: now };
+			this.eventCounts.set(instance, state);
+			return true;
+		}
+
+		state.count++;
+		if (state.count > UrlFinder.maxEventsPerWindow) {
+			// Too many events in this window, skip processing
+			return false;
+		}
+
+		return true;
 	}
 
 	private replPositions: Map<string, { position: number; tail: IReplElement }> = new Map();
