@@ -205,21 +205,21 @@ import './contrib/notebook/browser/notebook.contribution.js';
 // Speech
 import './contrib/speech/browser/speech.contribution.js';
 
-// Chat
-import './contrib/chat/browser/chat.contribution.js';
-import './contrib/inlineChat/browser/inlineChat.contribution.js';
-import './contrib/mcp/browser/mcp.contribution.js';
-import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
-import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
+// Chat - DISABLED for Leapfrog (replaced with Leapfrog AI Chat)
+// import './contrib/chat/browser/chat.contribution.js';
+// import './contrib/inlineChat/browser/inlineChat.contribution.js';
+// import './contrib/mcp/browser/mcp.contribution.js';
+// import './contrib/chat/browser/chatSessions/chatSessions.contribution.js';
+// import './contrib/chat/browser/contextContrib/chatContext.contribution.js';
 
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
 
-// repl
-import './contrib/replNotebook/browser/repl.contribution.js';
+// repl - DISABLED for Leapfrog
+// import './contrib/replNotebook/browser/repl.contribution.js';
 
-// Testing
-import './contrib/testing/browser/testing.contribution.js';
+// Testing - DISABLED for Leapfrog (not needed for qualitative research)
+// import './contrib/testing/browser/testing.contribution.js';
 
 // Logs
 import './contrib/logs/common/logs.contribution.js';
@@ -249,16 +249,16 @@ import './contrib/searchEditor/browser/searchEditor.contribution.js';
 // Sash
 import './contrib/sash/browser/sash.contribution.js';
 
-// SCM
-import './contrib/scm/browser/scm.contribution.js';
+// SCM - DISABLED for Leapfrog (not needed for qualitative research)
+// import './contrib/scm/browser/scm.contribution.js';
 
-// Debug
-import './contrib/debug/browser/debug.contribution.js';
-import './contrib/debug/browser/debugEditorContribution.js';
-import './contrib/debug/browser/breakpointEditorContribution.js';
-import './contrib/debug/browser/callStackEditorContribution.js';
-import './contrib/debug/browser/repl.js';
-import './contrib/debug/browser/debugViewlet.js';
+// Debug - DISABLED for Leapfrog (not needed for qualitative research)
+// import './contrib/debug/browser/debug.contribution.js';
+// import './contrib/debug/browser/debugEditorContribution.js';
+// import './contrib/debug/browser/breakpointEditorContribution.js';
+// import './contrib/debug/browser/callStackEditorContribution.js';
+// import './contrib/debug/browser/repl.js';
+// import './contrib/debug/browser/debugViewlet.js';
 
 // Markers
 import './contrib/markers/browser/markers.contribution.js';
@@ -307,12 +307,12 @@ import './contrib/externalTerminal/browser/externalTerminal.contribution.js';
 // Relauncher
 import './contrib/relauncher/browser/relauncher.contribution.js';
 
-// Tasks
-import './contrib/tasks/browser/task.contribution.js';
+// Tasks - DISABLED for Leapfrog (not needed for qualitative research)
+// import './contrib/tasks/browser/task.contribution.js';
 
-// Remote
-import './contrib/remote/common/remote.contribution.js';
-import './contrib/remote/browser/remote.contribution.js';
+// Remote - DISABLED for Leapfrog (local-first application)
+// import './contrib/remote/common/remote.contribution.js';
+// import './contrib/remote/browser/remote.contribution.js';
 
 // Emmet
 import './contrib/emmet/browser/emmet.contribution.js';
@@ -347,9 +347,9 @@ import './contrib/themes/browser/themes.contribution.js';
 // Update
 import './contrib/update/browser/update.contribution.js';
 
-// Surveys
-import './contrib/surveys/browser/nps.contribution.js';
-import './contrib/surveys/browser/languageSurveys.contribution.js';
+// Surveys - DISABLED for Leapfrog
+// import './contrib/surveys/browser/nps.contribution.js';
+// import './contrib/surveys/browser/languageSurveys.contribution.js';
 
 // Welcome
 import './contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js';
