@@ -1,0 +1,656 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Leapfrog Viewlet */
+.leapfrog-viewlet {
+	height: 100%;
+}
+
+/* Projects View */
+.leapfrog-projects-view {
+	padding: 10px;
+	height: 100%;
+	overflow-y: auto;
+}
+
+.leapfrog-welcome-icon {
+	font-size: 48px;
+	margin-bottom: 12px;
+}
+
+.leapfrog-projects-welcome {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	text-align: center;
+}
+
+/* Project Info (when project is open) */
+.leapfrog-project-info {
+	padding: 16px;
+}
+
+.leapfrog-project-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.leapfrog-project-icon {
+	font-size: 24px;
+}
+
+.leapfrog-project-name {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.leapfrog-project-path {
+	margin: 0 0 16px 0;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	word-break: break-all;
+}
+
+.leapfrog-project-actions {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 20px;
+}
+
+.leapfrog-project-actions button {
+	flex: 1;
+	padding: 6px 12px;
+	font-size: 12px;
+}
+
+.leapfrog-project-stats {
+	border-top: 1px solid var(--vscode-panel-border);
+	padding-top: 16px;
+}
+
+.leapfrog-project-stats h4 {
+	margin: 0 0 12px 0;
+	font-size: 12px;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+}
+
+.leapfrog-project-stats ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.leapfrog-project-stats li {
+	display: flex;
+	justify-content: space-between;
+	padding: 6px 0;
+	font-size: 13px;
+}
+
+.leapfrog-project-stats .stat-label {
+	color: var(--vscode-descriptionForeground);
+}
+
+.leapfrog-project-stats .stat-value {
+	font-weight: 600;
+}
+
+.leapfrog-projects-welcome h3 {
+	margin: 0 0 10px 0;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.leapfrog-projects-welcome p {
+	margin: 0 0 20px 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 13px;
+}
+
+.leapfrog-projects-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	max-width: 200px;
+}
+
+.leapfrog-projects-buttons button {
+	padding: 8px 16px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.leapfrog-recent-projects {
+	margin-top: 30px;
+	width: 100%;
+}
+
+.leapfrog-recent-projects h4 {
+	margin: 0 0 10px 0;
+	font-size: 12px;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+}
+
+.leapfrog-recent-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.leapfrog-recent-list li {
+	padding: 8px 12px;
+	cursor: pointer;
+	border-radius: 4px;
+}
+
+.leapfrog-recent-list li:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.leapfrog-recent-list li.empty {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	cursor: default;
+}
+
+.leapfrog-recent-list li.empty:hover {
+	background-color: transparent;
+}
+
+/* Tags View */
+.leapfrog-tags-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.leapfrog-tags-toolbar {
+	display: flex;
+	align-items: center;
+	padding: 6px 8px;
+	gap: 6px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	flex-shrink: 0;
+}
+
+.leapfrog-tags-add-btn {
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border-radius: 4px;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.leapfrog-tags-add-btn:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.leapfrog-tags-search {
+	flex: 1;
+}
+
+.leapfrog-tags-search input {
+	width: 100%;
+	padding: 3px 8px;
+	border: 1px solid var(--vscode-input-border);
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border-radius: 4px;
+	font-size: 12px;
+}
+
+.leapfrog-tags-search input:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+/* Tree container */
+.leapfrog-tags-tree-container {
+	flex: 1;
+	overflow: hidden;
+}
+
+/* Tag Item (inside tree row) */
+.leapfrog-tag-item {
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	height: 100%;
+	cursor: pointer;
+	user-select: none;
+}
+
+.leapfrog-tag-item:hover .leapfrog-tag-actions {
+	opacity: 1;
+}
+
+.leapfrog-tag-color {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	margin-right: 6px;
+	flex-shrink: 0;
+}
+
+.leapfrog-tag-name {
+	flex: 1;
+	font-size: 13px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.leapfrog-tag-count {
+	font-size: 10px;
+	padding: 1px 5px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	border-radius: 10px;
+	margin-right: 6px;
+	line-height: 1.4;
+}
+
+.leapfrog-tag-actions {
+	display: flex;
+	gap: 2px;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+
+.leapfrog-tag-action-btn {
+	width: 20px;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	color: var(--vscode-foreground);
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 14px;
+	opacity: 0.7;
+	padding: 0;
+}
+
+.leapfrog-tag-action-btn:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+	opacity: 1;
+}
+
+/* File group item */
+.leapfrog-file-group {
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	height: 100%;
+	gap: 5px;
+	cursor: pointer;
+}
+
+.leapfrog-file-group .codicon {
+	font-size: 14px;
+	opacity: 0.7;
+	flex-shrink: 0;
+}
+
+.leapfrog-file-name {
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--vscode-foreground);
+}
+
+/* Snippet item */
+.leapfrog-snippet {
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	height: 100%;
+	cursor: pointer;
+}
+
+.leapfrog-snippet-text {
+	font-size: 11px;
+	font-style: italic;
+	color: var(--vscode-descriptionForeground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Tag decoration highlight in editor */
+.leapfrog-tag-decoration {
+	border-bottom: 2px solid;
+	border-radius: 2px;
+}
+
+.leapfrog-tag-gutter-icon {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+/* Monaco button overrides for Leapfrog */
+.leapfrog-projects-view .monaco-button,
+.leapfrog-tags-view .monaco-button {
+	padding: 8px 16px;
+	border-radius: 4px;
+	font-size: 13px;
+	border: none;
+	cursor: pointer;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.leapfrog-projects-view .monaco-button:hover,
+.leapfrog-tags-view .monaco-button:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.leapfrog-projects-view .monaco-button.secondary,
+.leapfrog-tags-view .monaco-button.secondary {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.leapfrog-projects-view .monaco-button.secondary:hover,
+.leapfrog-tags-view .monaco-button.secondary:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Chat View */
+
+.leapfrog-chat-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Chat Header */
+.leapfrog-chat-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	flex-shrink: 0;
+}
+
+.leapfrog-chat-model-selector {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.leapfrog-chat-model-selector label {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.leapfrog-chat-model-selector select {
+	padding: 4px 8px;
+	border: 1px solid var(--vscode-input-border);
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border-radius: 4px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.leapfrog-chat-model-selector select:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+.leapfrog-chat-api-status {
+	display: flex;
+	align-items: center;
+}
+
+.leapfrog-configure-api {
+	padding: 4px 8px;
+	font-size: 11px;
+	border: none;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.leapfrog-configure-api:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Chat Messages */
+.leapfrog-chat-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+}
+
+/* Welcome Message */
+.leapfrog-chat-welcome {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	padding: 30px 20px;
+}
+
+.leapfrog-chat-welcome-icon {
+	font-size: 48px;
+	margin-bottom: 16px;
+}
+
+.leapfrog-chat-welcome h3 {
+	margin: 0 0 8px 0;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.leapfrog-chat-welcome p {
+	margin: 0 0 24px 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 13px;
+	max-width: 300px;
+}
+
+.leapfrog-chat-suggestions {
+	width: 100%;
+	max-width: 350px;
+}
+
+.leapfrog-chat-suggestions .suggestions-title {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 12px;
+	text-transform: uppercase;
+}
+
+.leapfrog-chat-suggestion {
+	display: block;
+	width: 100%;
+	padding: 10px 14px;
+	margin-bottom: 8px;
+	text-align: left;
+	font-size: 13px;
+	border: 1px solid var(--vscode-input-border);
+	background: var(--vscode-input-background);
+	color: var(--vscode-foreground);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: background-color 0.15s;
+}
+
+.leapfrog-chat-suggestion:hover {
+	background: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+/* Chat Message */
+.leapfrog-chat-message {
+	display: flex;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding: 12px;
+	border-radius: 8px;
+}
+
+.leapfrog-chat-message.user {
+	background: var(--vscode-input-background);
+}
+
+.leapfrog-chat-message.assistant {
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+}
+
+.leapfrog-chat-avatar {
+	font-size: 20px;
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.leapfrog-chat-content {
+	flex: 1;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+}
+
+/* Typing Indicator */
+.leapfrog-chat-typing {
+	display: flex;
+	gap: 12px;
+	padding: 12px;
+	border-radius: 8px;
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+}
+
+.leapfrog-chat-typing-dots {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.leapfrog-chat-typing-dots .dot {
+	width: 8px;
+	height: 8px;
+	background: var(--vscode-descriptionForeground);
+	border-radius: 50%;
+	animation: leapfrog-typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.leapfrog-chat-typing-dots .dot:nth-child(1) {
+	animation-delay: -0.32s;
+}
+
+.leapfrog-chat-typing-dots .dot:nth-child(2) {
+	animation-delay: -0.16s;
+}
+
+@keyframes leapfrog-typing-bounce {
+	0%, 80%, 100% {
+		transform: scale(0.6);
+		opacity: 0.5;
+	}
+	40% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+/* Chat Input */
+.leapfrog-chat-input-container {
+	padding: 12px;
+	border-top: 1px solid var(--vscode-panel-border);
+	flex-shrink: 0;
+}
+
+.leapfrog-chat-input-wrapper {
+	margin-bottom: 8px;
+}
+
+.leapfrog-chat-input-wrapper textarea {
+	width: 100%;
+	min-height: 60px;
+	max-height: 150px;
+	padding: 10px 12px;
+	border: 1px solid var(--vscode-input-border);
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border-radius: 6px;
+	font-size: 13px;
+	font-family: inherit;
+	resize: none;
+	line-height: 1.4;
+}
+
+.leapfrog-chat-input-wrapper textarea:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+.leapfrog-chat-input-wrapper textarea::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.leapfrog-chat-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.leapfrog-chat-send {
+	padding: 6px 16px;
+	border: none;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.leapfrog-chat-send:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.leapfrog-chat-clear {
+	padding: 6px 12px;
+	border: none;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.leapfrog-chat-clear:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
