@@ -53,7 +53,7 @@ abstract class BaseOpenRecentAction extends Action2 {
 
 	private readonly dirtyRecentlyOpenedFolder: IQuickInputButton = {
 		iconClass: 'dirty-workspace ' + ThemeIcon.asClassName(Codicon.closeDirty),
-		tooltip: localize('dirtyRecentlyOpenedFolder', "Folder With Unsaved Files"),
+		tooltip: localize('dirtyRecentlyOpenedFolder', "Project With Unsaved Files"),
 		alwaysVisible: true
 	};
 
@@ -64,7 +64,7 @@ abstract class BaseOpenRecentAction extends Action2 {
 
 	private readonly windowOpenedRecentlyOpenedFolder: IQuickInputButton = {
 		iconClass: 'opened-workspace ' + ThemeIcon.asClassName(Codicon.window),
-		tooltip: localize('openedRecentlyOpenedFolder', "Folder Opened in a Window"),
+		tooltip: localize('openedRecentlyOpenedFolder', "Project Opened in a Window"),
 		alwaysVisible: true
 	};
 
@@ -75,7 +75,7 @@ abstract class BaseOpenRecentAction extends Action2 {
 
 	private readonly activeWindowOpenedRecentlyOpenedFolder: IQuickInputButton = {
 		iconClass: 'opened-workspace ' + ThemeIcon.asClassName(Codicon.windowActive),
-		tooltip: localize('activeOpenedRecentlyOpenedFolder', "Folder Opened in Active Window"),
+		tooltip: localize('activeOpenedRecentlyOpenedFolder', "Project Opened in Active Window"),
 		alwaysVisible: true
 	};
 
@@ -167,7 +167,7 @@ abstract class BaseOpenRecentAction extends Action2 {
 
 		let keyMods: IKeyMods | undefined;
 
-		const workspaceSeparator: IQuickPickSeparator = { type: 'separator', label: hasWorkspaces ? localize('workspacesAndFolders', "folders & workspaces") : localize('folders', "folders") };
+		const workspaceSeparator: IQuickPickSeparator = { type: 'separator', label: hasWorkspaces ? localize('workspacesAndFolders', "projects") : localize('folders', "projects") };
 		const fileSeparator: IQuickPickSeparator = { type: 'separator', label: localize('files', "files") };
 		const picks = [workspaceSeparator, ...workspacePicks, fileSeparator, ...filePicks];
 

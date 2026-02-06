@@ -200,16 +200,16 @@ export class LeapfrogSQLiteDatabase {
 
 	private all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
 		return new Promise<T[]>((resolve, reject) => {
-			this.conn.all(sql, params, (err: Error | null, rows: T[]) => {
-				if (err) { reject(err); } else { resolve(rows ?? []); }
+			this.conn.all(sql, params, (err: Error | null, rows: unknown[]) => {
+				if (err) { reject(err); } else { resolve((rows ?? []) as T[]); }
 			});
 		});
 	}
 
 	private getOne<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
 		return new Promise<T | undefined>((resolve, reject) => {
-			this.conn.get(sql, params, (err: Error | null, row: T | undefined) => {
-				if (err) { reject(err); } else { resolve(row); }
+			this.conn.get(sql, params, (err: Error | null, row: unknown) => {
+				if (err) { reject(err); } else { resolve(row as T | undefined); }
 			});
 		});
 	}

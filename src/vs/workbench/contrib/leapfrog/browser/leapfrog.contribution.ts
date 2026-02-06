@@ -36,70 +36,25 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 
 import { leapfrogConfigurationSchema } from '../common/leapfrogConfiguration.js';
 import {
-	LEAPFROG_VIEWLET_ID,
-	LEAPFROG_PROJECTS_VIEW_ID,
+	LEAPFROG_TAGS_VIEWLET_ID,
 	LEAPFROG_TAGS_VIEW_ID,
 	LEAPFROG_CHAT_VIEWLET_ID,
 	LEAPFROG_CHAT_VIEW_ID,
-	LeapfrogViewletVisibleContext,
+	LeapfrogTagsViewletVisibleContext,
 	LeapfrogChatViewVisibleContext,
 } from '../common/leapfrog.js';
 
 // Import views
-import { LeapfrogProjectsView } from './views/projectsView.js';
 import { LeapfrogTagsView } from './views/tagsView.js';
 import { LeapfrogChatView } from './views/chatView.js';
 
 // Register icons
-const leapfrogViewIcon = registerIcon('leapfrog-view-icon', Codicon.notebook, localize('leapfrogViewIcon', 'View icon of the Leapfrog view.'));
-const leapfrogProjectsViewIcon = registerIcon('leapfrog-projects-view-icon', Codicon.folder, localize('leapfrogProjectsViewIcon', 'View icon of the Leapfrog Projects view.'));
 const leapfrogTagsViewIcon = registerIcon('leapfrog-tags-view-icon', Codicon.tag, localize('leapfrogTagsViewIcon', 'View icon of the Leapfrog Tags view.'));
 const leapfrogChatViewIcon = registerIcon('leapfrog-chat-view-icon', Codicon.commentDiscussion, localize('leapfrogChatViewIcon', 'View icon of the Leapfrog Chat view.'));
 
 // Register configuration
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 configurationRegistry.registerConfiguration(leapfrogConfigurationSchema);
-
-/**
- * Leapfrog View Pane Container (Sidebar)
- */
-export class LeapfrogViewPaneContainer extends ViewPaneContainer {
-
-	private viewletVisibleContextKey: IContextKey<boolean>;
-
-	constructor(
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
-		@ITelemetryService telemetryService: ITelemetryService,
-		@IWorkspaceContextService contextService: IWorkspaceContextService,
-		@IStorageService storageService: IStorageService,
-		@IConfigurationService configurationService: IConfigurationService,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@IContextKeyService contextKeyService: IContextKeyService,
-		@IThemeService themeService: IThemeService,
-		@IContextMenuService contextMenuService: IContextMenuService,
-		@IExtensionService extensionService: IExtensionService,
-		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
-		@ILogService logService: ILogService,
-	) {
-		super(LEAPFROG_VIEWLET_ID, { mergeViewWithContainerWhenSingleView: false }, instantiationService, configurationService, layoutService, contextMenuService, telemetryService, extensionService, themeService, storageService, contextService, viewDescriptorService, logService);
-
-		this.viewletVisibleContextKey = LeapfrogViewletVisibleContext.bindTo(contextKeyService);
-	}
-
-	override create(parent: HTMLElement): void {
-		super.create(parent);
-		parent.classList.add('leapfrog-viewlet');
-	}
-
-	override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		this.viewletVisibleContextKey.set(visible);
-	}
-
-	override getTitle(): string {
-		return localize('leapfrog', "Leapfrog");
-	}
-}
 
 /**
  * Leapfrog Chat View Pane Container (Auxiliary Bar / Right Sidebar)
@@ -142,22 +97,50 @@ export class LeapfrogChatViewPaneContainer extends ViewPaneContainer {
 	}
 }
 
+/**
+ * Leapfrog Tags View Pane Container (Sidebar - standalone activity bar entry)
+ */
+export class LeapfrogTagsViewPaneContainer extends ViewPaneContainer {
+
+	private tagsViewletVisibleContextKey: IContextKey<boolean>;
+
+	constructor(
+		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@ITelemetryService telemetryService: ITelemetryService,
+		@IWorkspaceContextService contextService: IWorkspaceContextService,
+		@IStorageService storageService: IStorageService,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IThemeService themeService: IThemeService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@IExtensionService extensionService: IExtensionService,
+		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
+		@ILogService logService: ILogService,
+	) {
+		super(LEAPFROG_TAGS_VIEWLET_ID, { mergeViewWithContainerWhenSingleView: true }, instantiationService, configurationService, layoutService, contextMenuService, telemetryService, extensionService, themeService, storageService, contextService, viewDescriptorService, logService);
+
+		this.tagsViewletVisibleContextKey = LeapfrogTagsViewletVisibleContext.bindTo(contextKeyService);
+	}
+
+	override create(parent: HTMLElement): void {
+		super.create(parent);
+		parent.classList.add('leapfrog-tags-viewlet');
+	}
+
+	override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.tagsViewletVisibleContextKey.set(visible);
+	}
+
+	override getTitle(): string {
+		return localize('tags', "Tags");
+	}
+}
+
 // Register view containers (after classes are defined)
 const viewContainersRegistry = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewContainersRegistry);
 const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
-
-/**
- * Leapfrog view container in the sidebar
- */
-const VIEW_CONTAINER: ViewContainer = viewContainersRegistry.registerViewContainer({
-	id: LEAPFROG_VIEWLET_ID,
-	title: localize2('leapfrog', "Leapfrog"),
-	icon: leapfrogViewIcon,
-	ctorDescriptor: new SyncDescriptor(LeapfrogViewPaneContainer),
-	storageId: 'workbench.leapfrog.views.state',
-	order: 0,  // Show first in activity bar
-	hideIfEmpty: false,
-}, ViewContainerLocation.Sidebar, { isDefault: false });
 
 /**
  * Chat view container in the auxiliary bar (right sidebar) - replaces Copilot
@@ -173,6 +156,27 @@ const CHAT_VIEW_CONTAINER: ViewContainer = viewContainersRegistry.registerViewCo
 }, ViewContainerLocation.AuxiliaryBar, { isDefault: true });
 
 /**
+ * Tags view container in the sidebar (standalone activity bar entry)
+ */
+const TAGS_VIEW_CONTAINER: ViewContainer = viewContainersRegistry.registerViewContainer({
+	id: LEAPFROG_TAGS_VIEWLET_ID,
+	title: localize2('tags', "Tags"),
+	icon: leapfrogTagsViewIcon,
+	ctorDescriptor: new SyncDescriptor(LeapfrogTagsViewPaneContainer),
+	storageId: 'workbench.tags.views.state',
+	order: 0,  // Tags=0, Explorer=1, Search=2
+	hideIfEmpty: false,
+	openCommandActionDescriptor: {
+		id: 'workbench.view.tags.focus',
+		title: localize2('openTags', "Open Tags"),
+		keybindings: {
+			primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT,
+		},
+		order: 1,
+	},
+}, ViewContainerLocation.Sidebar, { isDefault: false });
+
+/**
  * Contribution that registers Leapfrog views
  */
 class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribution {
@@ -185,42 +189,23 @@ class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribu
 	}
 
 	private registerViews(): void {
-		// Register sidebar views
-		const sidebarViewDescriptors: IViewDescriptor[] = [];
-
-		// Projects View
-		sidebarViewDescriptors.push({
-			id: LEAPFROG_PROJECTS_VIEW_ID,
-			name: localize2('leapfrogProjects', "Projects"),
-			ctorDescriptor: new SyncDescriptor(LeapfrogProjectsView),
-			containerIcon: leapfrogProjectsViewIcon,
-			order: 1,
-			canToggleVisibility: true,
-			canMoveView: true,
-			collapsed: false,
-			focusCommand: {
-				id: 'workbench.leapfrog.projectsView.focus',
-				keybindings: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyCode.KeyP) }
-			}
-		});
-
-		// Tags View
-		sidebarViewDescriptors.push({
+		// Tags View (standalone activity bar container)
+		const tagsViewDescriptor: IViewDescriptor = {
 			id: LEAPFROG_TAGS_VIEW_ID,
 			name: localize2('leapfrogTags', "Tags"),
 			ctorDescriptor: new SyncDescriptor(LeapfrogTagsView),
 			containerIcon: leapfrogTagsViewIcon,
-			order: 2,
-			canToggleVisibility: true,
+			order: 1,
+			canToggleVisibility: false,
 			canMoveView: true,
 			collapsed: false,
 			focusCommand: {
 				id: 'workbench.leapfrog.tagsView.focus',
 				keybindings: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyCode.KeyT) }
 			}
-		});
+		};
 
-		viewsRegistry.registerViews(sidebarViewDescriptors, VIEW_CONTAINER);
+		viewsRegistry.registerViews([tagsViewDescriptor], TAGS_VIEW_CONTAINER);
 
 		// Register chat view in auxiliary bar
 		const chatViewDescriptor: IViewDescriptor = {
@@ -249,13 +234,13 @@ class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribu
  * Storage key for pinned view containers in activity bar
  */
 const PINNED_VIEW_CONTAINERS_KEY = 'workbench.activity.pinnedViewlets2';
-const LEAPFROG_INITIALIZED_KEY = 'leapfrog.activityBarInitialized';
+const LEAPFROG_INITIALIZED_KEY = 'leapfrog.activityBarInitialized.v3';
 
 /**
  * View containers to show in Leapfrog (research-focused)
  */
 const VISIBLE_VIEW_CONTAINERS = [
-	'workbench.view.leapfrog',      // Leapfrog (our main sidebar)
+	'workbench.view.tags',          // Tags (codebook)
 	'workbench.view.explorer',      // File Explorer
 	'workbench.view.search',        // Search
 ];
@@ -264,6 +249,7 @@ const VISIBLE_VIEW_CONTAINERS = [
  * View containers to hide by default (developer-focused)
  */
 const HIDDEN_VIEW_CONTAINERS = [
+	'workbench.view.leapfrog',      // Removed Leapfrog sidebar (projects handled elsewhere)
 	'workbench.view.scm',           // Source Control
 	'workbench.view.debug',         // Run and Debug
 	'workbench.view.extensions',    // Extensions

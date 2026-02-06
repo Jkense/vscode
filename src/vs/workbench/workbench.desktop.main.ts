@@ -107,8 +107,8 @@ registerSingleton(IUserDataInitializationService, new SyncDescriptor(UserDataIni
 // Logs
 import './contrib/logs/electron-browser/logs.contribution.js';
 
-// Localizations
-import './contrib/localization/electron-browser/localization.contribution.js';
+// Localizations - Disabled for Leapfrog (depends on extensionsWorkbenchService)
+// import './contrib/localization/electron-browser/localization.contribution.js';
 
 // Explorer
 import './contrib/files/electron-browser/fileActions.contribution.js';
@@ -116,29 +116,29 @@ import './contrib/files/electron-browser/fileActions.contribution.js';
 // CodeEditor Contributions
 import './contrib/codeEditor/electron-browser/codeEditor.contribution.js';
 
-// Debug - DISABLED for Leapfrog
+// Debug - Disabled for Leapfrog
 // import './contrib/debug/electron-browser/extensionHostDebugService.js';
 
-// Extensions Management
-import './contrib/extensions/electron-browser/extensions.contribution.js';
+// Extensions Management - Disabled for Leapfrog
+// import './contrib/extensions/electron-browser/extensions.contribution.js';
 
-// Issues
-import './contrib/issue/electron-browser/issue.contribution.js';
+// Issues - Disabled for Leapfrog
+// import './contrib/issue/electron-browser/issue.contribution.js';
 
 // Process Explorer
 import './contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 
-// Remote - DISABLED for Leapfrog (local-first application)
+// Remote - Disabled for Leapfrog
 // import './contrib/remote/electron-browser/remote.contribution.js';
 
-// Terminal
-import './contrib/terminal/electron-browser/terminal.contribution.js';
+// Terminal - Disabled for Leapfrog
+// import './contrib/terminal/electron-browser/terminal.contribution.js';
 
 // Themes
 import './contrib/themes/browser/themes.test.contribution.js';
 import './services/themes/electron-browser/themes.contribution.js';
-// User Data Sync
-import './contrib/userDataSync/electron-browser/userDataSync.contribution.js';
+// User Data Sync - Disabled for Leapfrog
+// import './contrib/userDataSync/electron-browser/userDataSync.contribution.js';
 
 // Tags
 import './contrib/tags/electron-browser/workspaceTagsService.js';
@@ -146,11 +146,11 @@ import './contrib/tags/electron-browser/tags.contribution.js';
 // Performance
 import './contrib/performance/electron-browser/performance.contribution.js';
 
-// Tasks - DISABLED for Leapfrog
+// Tasks - Disabled for Leapfrog
 // import './contrib/tasks/electron-browser/taskService.js';
 
-// External terminal
-import './contrib/externalTerminal/electron-browser/externalTerminal.contribution.js';
+// External terminal - Disabled for Leapfrog
+// import './contrib/externalTerminal/electron-browser/externalTerminal.contribution.js';
 
 // Webview
 import './contrib/webview/electron-browser/webview.contribution.js';
@@ -161,32 +161,36 @@ import './contrib/browserView/electron-browser/browserView.contribution.js';
 // Splash
 import './contrib/splash/electron-browser/splash.contribution.js';
 
-// Local History
-import './contrib/localHistory/electron-browser/localHistory.contribution.js';
+// Local History - Disabled for Leapfrog
+// import './contrib/localHistory/electron-browser/localHistory.contribution.js';
 
-// Merge Editor
-import './contrib/mergeEditor/electron-browser/mergeEditor.contribution.js';
+// Merge Editor - Disabled for Leapfrog
+// import './contrib/mergeEditor/electron-browser/mergeEditor.contribution.js';
 
-// Multi Diff Editor
-import './contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
+// Multi Diff Editor - Disabled for Leapfrog
+// import './contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 
-// Remote Tunnel - DISABLED for Leapfrog
+// Remote Tunnel - Disabled for Leapfrog
 // import './contrib/remoteTunnel/electron-browser/remoteTunnel.contribution.js';
 
-// Chat - DISABLED for Leapfrog (replaced with Leapfrog AI Chat)
+// Chat - Disabled in favor of Leapfrog AI
 // import './contrib/chat/electron-browser/chat.contribution.js';
 // import './contrib/inlineChat/electron-browser/inlineChat.contribution.js';
+
 // Encryption
 import './contrib/encryption/electron-browser/encryption.contribution.js';
 
 // Emergency Alert
 import './contrib/emergencyAlert/electron-browser/emergencyAlert.contribution.js';
 
-// MCP - DISABLED for Leapfrog (replaced with Leapfrog AI)
+// MCP - Disabled in favor of Leapfrog AI
 // import './contrib/mcp/electron-browser/mcp.contribution.js';
 
 // Policy Export
 import './contrib/policyExport/electron-browser/policyExport.contribution.js';
+
+// Leapfrog - Qualitative Research IDE (Desktop)
+import './contrib/leapfrog/electron-browser/leapfrog.contribution.js';
 
 //#endregion
 

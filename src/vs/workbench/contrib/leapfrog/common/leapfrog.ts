@@ -19,6 +19,11 @@ export const LEAPFROG_VIEWLET_ID = 'workbench.view.leapfrog';
 export const LEAPFROG_PROJECTS_VIEW_ID = 'workbench.leapfrog.projectsView';
 
 /**
+ * Leapfrog Tags viewlet id (standalone activity bar entry).
+ */
+export const LEAPFROG_TAGS_VIEWLET_ID = 'workbench.view.tags';
+
+/**
  * Leapfrog Tags view id.
  */
 export const LEAPFROG_TAGS_VIEW_ID = 'workbench.leapfrog.tagsView';
@@ -39,6 +44,7 @@ export const LEAPFROG_CHAT_VIEW_ID = 'workbench.panel.chat.view';
 export const LeapfrogViewletVisibleContext = new RawContextKey<boolean>('leapfrogViewletVisible', false, { type: 'boolean', description: localize('leapfrogViewletVisible', "True when the LEAPFROG viewlet is visible.") });
 export const LeapfrogProjectsViewVisibleContext = new RawContextKey<boolean>('leapfrogProjectsViewVisible', false, { type: 'boolean', description: localize('leapfrogProjectsViewVisible', "True when the LEAPFROG Projects view is visible.") });
 export const LeapfrogTagsViewVisibleContext = new RawContextKey<boolean>('leapfrogTagsViewVisible', false, { type: 'boolean', description: localize('leapfrogTagsViewVisible', "True when the LEAPFROG Tags view is visible.") });
+export const LeapfrogTagsViewletVisibleContext = new RawContextKey<boolean>('leapfrogTagsViewletVisible', false, { type: 'boolean', description: localize('leapfrogTagsViewletVisible', "True when the LEAPFROG Tags viewlet is visible.") });
 export const LeapfrogChatViewVisibleContext = new RawContextKey<boolean>('leapfrogChatViewVisible', false, { type: 'boolean', description: localize('leapfrogChatViewVisible', "True when the LEAPFROG Chat view is visible.") });
 
 /**

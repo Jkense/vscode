@@ -191,6 +191,9 @@ import './services/accounts/browser/defaultAccount.js';
 // Telemetry
 import './contrib/telemetry/browser/telemetry.contribution.js';
 
+// Leapfrog - Qualitative Research IDE (early load to register stub services)
+import './contrib/leapfrog/browser/leapfrog.contribution.js';
+
 // Preferences
 import './contrib/preferences/browser/preferences.contribution.js';
 import './contrib/preferences/browser/keybindingsEditorContribution.js';
@@ -205,7 +208,7 @@ import './contrib/notebook/browser/notebook.contribution.js';
 // Speech
 import './contrib/speech/browser/speech.contribution.js';
 
-// Chat - DISABLED for Leapfrog (replaced with Leapfrog AI Chat)
+// Chat - Disabled in favor of Leapfrog AI
 // import './contrib/chat/browser/chat.contribution.js';
 // import './contrib/inlineChat/browser/inlineChat.contribution.js';
 // import './contrib/mcp/browser/mcp.contribution.js';
@@ -215,10 +218,10 @@ import './contrib/speech/browser/speech.contribution.js';
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
 
-// repl - DISABLED for Leapfrog
-// import './contrib/replNotebook/browser/repl.contribution.js';
+// repl
+import './contrib/replNotebook/browser/repl.contribution.js';
 
-// Testing - DISABLED for Leapfrog (not needed for qualitative research)
+// Testing - Disabled for Leapfrog
 // import './contrib/testing/browser/testing.contribution.js';
 
 // Logs
@@ -249,10 +252,10 @@ import './contrib/searchEditor/browser/searchEditor.contribution.js';
 // Sash
 import './contrib/sash/browser/sash.contribution.js';
 
-// SCM - DISABLED for Leapfrog (not needed for qualitative research)
+// SCM - Disabled for Leapfrog
 // import './contrib/scm/browser/scm.contribution.js';
 
-// Debug - DISABLED for Leapfrog (not needed for qualitative research)
+// Debug - Disabled for Leapfrog
 // import './contrib/debug/browser/debug.contribution.js';
 // import './contrib/debug/browser/debugEditorContribution.js';
 // import './contrib/debug/browser/breakpointEditorContribution.js';
@@ -266,11 +269,11 @@ import './contrib/markers/browser/markers.contribution.js';
 // Process Explorer
 import './contrib/processExplorer/browser/processExplorer.contribution.js';
 
-// Merge Editor
-import './contrib/mergeEditor/browser/mergeEditor.contribution.js';
+// Merge Editor - Disabled for Leapfrog
+// import './contrib/mergeEditor/browser/mergeEditor.contribution.js';
 
-// Multi Diff Editor
-import './contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
+// Multi Diff Editor - Disabled for Leapfrog
+// import './contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 
 // Commands
 import './contrib/commands/common/commands.contribution.js';
@@ -290,27 +293,27 @@ import './contrib/customEditor/browser/customEditor.contribution.js';
 // External Uri Opener
 import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 
-// Extensions Management
-import './contrib/extensions/browser/extensions.contribution.js';
-import './contrib/extensions/browser/extensionsViewlet.js';
+// Extensions Management - Disabled for Leapfrog
+// import './contrib/extensions/browser/extensions.contribution.js';
+// import './contrib/extensions/browser/extensionsViewlet.js';
 
 // Output View
 import './contrib/output/browser/output.contribution.js';
 import './contrib/output/browser/outputView.js';
 
-// Terminal
-import './contrib/terminal/terminal.all.js';
+// Terminal - Disabled for Leapfrog
+// import './contrib/terminal/terminal.all.js';
 
-// External terminal
-import './contrib/externalTerminal/browser/externalTerminal.contribution.js';
+// External terminal - Disabled for Leapfrog
+// import './contrib/externalTerminal/browser/externalTerminal.contribution.js';
 
 // Relauncher
 import './contrib/relauncher/browser/relauncher.contribution.js';
 
-// Tasks - DISABLED for Leapfrog (not needed for qualitative research)
+// Tasks - Disabled for Leapfrog
 // import './contrib/tasks/browser/task.contribution.js';
 
-// Remote - DISABLED for Leapfrog (local-first application)
+// Remote - Disabled for Leapfrog
 // import './contrib/remote/common/remote.contribution.js';
 // import './contrib/remote/browser/remote.contribution.js';
 
@@ -344,12 +347,12 @@ import './contrib/inlayHints/browser/inlayHintsAccessibilty.js';
 // Themes
 import './contrib/themes/browser/themes.contribution.js';
 
-// Update
-import './contrib/update/browser/update.contribution.js';
+// Update - Disabled for Leapfrog
+// import './contrib/update/browser/update.contribution.js';
 
-// Surveys - DISABLED for Leapfrog
-// import './contrib/surveys/browser/nps.contribution.js';
-// import './contrib/surveys/browser/languageSurveys.contribution.js';
+// Surveys
+import './contrib/surveys/browser/nps.contribution.js';
+import './contrib/surveys/browser/languageSurveys.contribution.js';
 
 // Welcome
 import './contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js';
@@ -358,11 +361,11 @@ import './contrib/welcomeWalkthrough/browser/walkThrough.contribution.js';
 import './contrib/welcomeViews/common/viewsWelcome.contribution.js';
 import './contrib/welcomeViews/common/newFile.contribution.js';
 
-// Call Hierarchy
-import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
+// Call Hierarchy - Disabled for Leapfrog
+// import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
 
-// Type Hierarchy
-import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
+// Type Hierarchy - Disabled for Leapfrog
+// import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 
 // Outline
 import './contrib/codeEditor/browser/outline/documentSymbolsOutline.js';
@@ -377,14 +380,14 @@ import './contrib/languageStatus/browser/languageStatus.contribution.js';
 // Authentication
 import './contrib/authentication/browser/authentication.contribution.js';
 
-// User Data Sync
-import './contrib/userDataSync/browser/userDataSync.contribution.js';
+// User Data Sync - Disabled for Leapfrog
+// import './contrib/userDataSync/browser/userDataSync.contribution.js';
 
 // User Data Profiles
 import './contrib/userDataProfile/browser/userDataProfile.contribution.js';
 
-// Continue Edit Session
-import './contrib/editSessions/browser/editSessions.contribution.js';
+// Continue Edit Session - Disabled for Leapfrog
+// import './contrib/editSessions/browser/editSessions.contribution.js';
 
 // Remote Coding Agents
 import './contrib/remoteCodingAgents/browser/remoteCodingAgents.contribution.js';
@@ -392,11 +395,11 @@ import './contrib/remoteCodingAgents/browser/remoteCodingAgents.contribution.js'
 // Code Actions
 import './contrib/codeActions/browser/codeActions.contribution.js';
 
-// Timeline
-import './contrib/timeline/browser/timeline.contribution.js';
+// Timeline - Disabled for Leapfrog
+// import './contrib/timeline/browser/timeline.contribution.js';
 
-// Local History
-import './contrib/localHistory/browser/localHistory.contribution.js';
+// Local History - Disabled for Leapfrog
+// import './contrib/localHistory/browser/localHistory.contribution.js';
 
 // Workspace
 import './contrib/workspace/browser/workspace.contribution.js';
@@ -410,14 +413,14 @@ import './contrib/list/browser/list.contribution.js';
 // Accessibility Signals
 import './contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 
-// Bracket Pair Colorizer 2 Telemetry
-import './contrib/bracketPairColorizer2Telemetry/browser/bracketPairColorizer2Telemetry.contribution.js';
+// Bracket Pair Colorizer 2 Telemetry - Disabled for Leapfrog (depends on extensionsWorkbenchService)
+// import './contrib/bracketPairColorizer2Telemetry/browser/bracketPairColorizer2Telemetry.contribution.js';
 
 // Accessibility
 import './contrib/accessibility/browser/accessibility.contribution.js';
 
-// Share
-import './contrib/share/browser/share.contribution.js';
+// Share - Disabled for Leapfrog
+// import './contrib/share/browser/share.contribution.js';
 
 // Synchronized Scrolling
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
@@ -428,8 +431,8 @@ import './contrib/inlineCompletions/browser/inlineCompletions.contribution.js';
 // Drop or paste into
 import './contrib/dropOrPasteInto/browser/dropOrPasteInto.contribution.js';
 
-// Edit Telemetry
-import './contrib/editTelemetry/browser/editTelemetry.contribution.js';
+// Edit Telemetry - Disabled for Leapfrog (depends on scm service)
+// import './contrib/editTelemetry/browser/editTelemetry.contribution.js';
 
 // Opener
 import './contrib/opener/browser/opener.contribution.js';

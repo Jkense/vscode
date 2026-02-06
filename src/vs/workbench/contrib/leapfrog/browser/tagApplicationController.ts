@@ -13,7 +13,7 @@
  */
 
 import * as nls from '../../../../nls.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { IModelDeltaDecoration, OverviewRulerLane, MinimapPosition, TrackedRangeStickiness } from '../../../../editor/common/model.js';
@@ -23,7 +23,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { MenuId, Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { KeyMod, KeyCode, KeyChord } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ITextAnchor, ILeapfrogTagService, ILeapfrogTagWithCount, ILeapfrogTagApplication } from '../common/leapfrog.js';
@@ -147,12 +147,8 @@ class ApplyTagAction extends Action2 {
 		const tags = await tagService.getTags();
 		if (tags.length === 0) {
 			// Offer to create one
-			const name = await quickInputService.input({
-				placeHolder: nls.localize('newTagName', "Tag name"),
-				prompt: nls.localize('noTagsCreate', "No tags exist yet. Enter a name to create one."),
-			});
-			if (!name) { return; }
-			const newTag = await tagService.createTag(name.trim(), '#22c55e');
+			const newTag = await this.promptCreateTag(quickInputService, tagService);
+			if (!newTag) { return; }
 			await this.applyToSelection(tagService, logService, editor, filePath, newTag.id);
 			return;
 		}
@@ -167,19 +163,61 @@ class ApplyTagAction extends Action2 {
 		};
 		flatten(tags, 0);
 
-		const items: (IQuickPickItem & { tagId: string })[] = flatTags.map(({ tag, depth }) => ({
+		interface TagQuickPickItem extends IQuickPickItem { tagId: string; isCreateNew?: boolean }
+
+		const items: (TagQuickPickItem | IQuickPickSeparator)[] = flatTags.map(({ tag, depth }) => ({
 			label: `${'  '.repeat(depth)}$(circle-filled) ${tag.name}`,
-			description: `${tag.applicationCount} uses`,
+			description: tag.color,
+			detail: tag.applicationCount === 1
+				? nls.localize('tagUsesSingular', "{0} application", tag.applicationCount)
+				: nls.localize('tagUsesPlural', "{0} applications", tag.applicationCount),
 			tagId: tag.id,
+			iconClass: undefined,
 		}));
 
-		const picked = await quickInputService.pick(items, {
+		// Add separator + "Create New Tag..." option
+		items.push({ type: 'separator', label: '' });
+		items.push({
+			label: `$(add) ${nls.localize('createNewTag', "Create New Tag...")}`,
+			tagId: '',
+			isCreateNew: true,
+		});
+
+		const picked = await quickInputService.pick(items as TagQuickPickItem[], {
 			placeHolder: nls.localize('pickTag', "Select a tag to apply"),
 		});
 
 		if (!picked) { return; }
 
-		await this.applyToSelection(tagService, logService, editor, filePath, (picked as typeof items[number]).tagId);
+		const pickedItem = picked as TagQuickPickItem;
+		if (pickedItem.isCreateNew) {
+			const newTag = await this.promptCreateTag(quickInputService, tagService);
+			if (!newTag) { return; }
+			await this.applyToSelection(tagService, logService, editor, filePath, newTag.id);
+			return;
+		}
+
+		await this.applyToSelection(tagService, logService, editor, filePath, pickedItem.tagId);
+	}
+
+	private async promptCreateTag(
+		quickInputService: IQuickInputService,
+		tagService: ILeapfrogTagService,
+	): Promise<ILeapfrogTagWithCount | undefined> {
+		const name = await quickInputService.input({
+			placeHolder: nls.localize('newTagName', "Tag name"),
+			prompt: nls.localize('enterTagName', "Enter a name for the new tag"),
+		});
+		if (!name) { return undefined; }
+
+		const DEFAULT_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+		const colorPick = await quickInputService.pick(
+			DEFAULT_COLORS.map(c => ({ label: `$(circle-filled) ${c}`, description: c, color: c })),
+			{ placeHolder: nls.localize('pickColor', "Select a tag color") },
+		);
+		const color = (colorPick as { color: string } | undefined)?.color ?? '#22c55e';
+
+		return tagService.createTag(name.trim(), color);
 	}
 
 	private async applyToSelection(
@@ -217,9 +255,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 
 	static readonly ID = 'workbench.contrib.leapfrogTagDecorations';
 
-	private readonly editorDisposables = this._register(new DisposableStore());
 	private decorationIds: string[] = [];
-	private currentFilePath: string | undefined;
 
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,
@@ -254,7 +290,6 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 		}
 
 		const filePath = resource.fsPath;
-		this.currentFilePath = filePath;
 
 		try {
 			const applications = await this.tagService.getApplicationsForFile(filePath);
@@ -304,7 +339,6 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 			});
 		}
 		this.decorationIds = [];
-		this.currentFilePath = undefined;
 	}
 }
 

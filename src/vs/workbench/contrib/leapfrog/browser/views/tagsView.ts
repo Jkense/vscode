@@ -21,7 +21,8 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { $, append } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAsyncDataSource, ITreeNode, ITreeRenderer } from '../../../../../base/browser/ui/tree/tree.js';
-import { IListVirtualDelegate, IIdentityProvider, IListAccessibilityProvider } from '../../../../../base/browser/ui/list/list.js';
+import { IListVirtualDelegate, IIdentityProvider } from '../../../../../base/browser/ui/list/list.js';
+import { IListAccessibilityProvider } from '../../../../../base/browser/ui/list/listWidget.js';
 import { WorkbenchAsyncDataTree } from '../../../../../platform/list/browser/listService.js';
 import { FuzzyScore } from '../../../../../base/common/filters.js';
 import {
