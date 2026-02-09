@@ -4,29 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * SQLite database wrapper for Leapfrog project data.
+ * JSON-file-backed database for Leapfrog project data.
  *
- * Uses @vscode/sqlite3 (already bundled with VS Code) with a Promise-based
- * API. Each project gets a `.leapfrog/leapfrog.db` database with WAL mode
- * and foreign keys enabled.
+ * All data lives in memory; writes are debounced to `.leapfrog/leapfrog.json`
+ * via IFileService (which works in the renderer via DI).
  */
 
-import { join } from '../../../../base/common/path.js';
-
-// Local type for @vscode/sqlite3 Database (loaded dynamically to satisfy import rules)
-interface ISQLiteDatabase {
-	exec(sql: string, callback?: (err: Error | null) => void): void;
-	run(sql: string, params: unknown[], callback: (this: { lastID: number; changes: number }, err: Error | null) => void): void;
-	all(sql: string, params: unknown[], callback: (err: Error | null, rows: unknown[]) => void): void;
-	get(sql: string, params: unknown[], callback: (err: Error | null, row: unknown) => void): void;
-	close(callback?: (err: Error | null) => void): void;
-}
-
-// ---------------------------------------------------------------------------
-// Schema
-// ---------------------------------------------------------------------------
-
-const SCHEMA_VERSION = 1;
+import { URI } from '../../../../base/common/uri.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { joinPath } from '../../../../base/common/resources.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,161 +46,100 @@ export interface ITagApplicationRow {
 	created_at: string;
 }
 
+export interface ITagApplicationWithTagRow extends ITagApplicationRow {
+	tag_name: string;
+	tag_color: string;
+	tag_description: string | null;
+}
+
 export interface ITagWithCountRow extends ITagRow {
 	application_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Internal store shape
+// ---------------------------------------------------------------------------
+
+interface ILeapfrogStore {
+	version: number;
+	tags: ITagRow[];
+	tag_applications: ITagApplicationRow[];
 }
 
 // ---------------------------------------------------------------------------
 // Database wrapper
 // ---------------------------------------------------------------------------
 
-export class LeapfrogSQLiteDatabase {
+export class LeapfrogJsonDatabase extends Disposable {
 
-	private db: ISQLiteDatabase | undefined;
-	private dbPath: string | undefined;
+	private store: ILeapfrogStore | undefined;
+	private fileUri: URI | undefined;
+	private dirty = false;
+
+	private readonly saveScheduler = this._register(new RunOnceScheduler(() => this.flush(), 500));
+
+	constructor(
+		private readonly fileService: IFileService,
+	) {
+		super();
+	}
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
 	// -----------------------------------------------------------------------
 
 	async open(projectPath: string): Promise<void> {
-		const leapfrogDir = join(projectPath, '.leapfrog');
-		const fs = await import('fs/promises');
-		await fs.mkdir(leapfrogDir, { recursive: true });
+		const projectUri = URI.file(projectPath);
+		const leapfrogDir = joinPath(projectUri, '.leapfrog');
+		this.fileUri = joinPath(leapfrogDir, 'leapfrog.json');
 
-		this.dbPath = join(leapfrogDir, 'leapfrog.db');
-
-		const sqlite3Module = await import('@vscode/sqlite3');
-		const Ctor = sqlite3Module.default.Database;
-
-		return new Promise<void>((resolve, reject) => {
-			this.db = new Ctor(this.dbPath!, (err: Error | null) => {
-				if (err) {
-					reject(err);
-					return;
-				}
-				this.runMigrations().then(resolve, reject);
-			});
-		});
-	}
-
-	close(): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			if (!this.db) {
-				resolve();
-				return;
+		try {
+			const content = await this.fileService.readFile(this.fileUri);
+			this.store = JSON.parse(content.value.toString());
+		} catch {
+			// File doesn't exist or is invalid - start fresh
+			this.store = { version: 1, tags: [], tag_applications: [] };
+			try {
+				await this.fileService.createFolder(leapfrogDir);
+			} catch {
+				// Folder may already exist
 			}
-			this.db.close((err: Error | null) => {
-				this.db = undefined;
-				if (err) {
-					reject(err);
-				} else {
-					resolve();
-				}
-			});
-		});
+			await this.flush();
+		}
 	}
 
-	private get conn(): ISQLiteDatabase {
-		if (!this.db) {
+	async close(): Promise<void> {
+		if (this.dirty) {
+			this.saveScheduler.cancel();
+			await this.flush();
+		}
+		this.store = undefined;
+		this.fileUri = undefined;
+	}
+
+	private get data(): ILeapfrogStore {
+		if (!this.store) {
 			throw new Error('Database not open');
 		}
-		return this.db;
+		return this.store;
 	}
 
 	// -----------------------------------------------------------------------
-	// Migrations
+	// Persistence
 	// -----------------------------------------------------------------------
 
-	private async runMigrations(): Promise<void> {
-		// Enable WAL and foreign keys
-		await this.exec('PRAGMA journal_mode = WAL');
-		await this.exec('PRAGMA foreign_keys = ON');
-
-		// Check current version
-		await this.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
-		const row = await this.getOne<{ version: number }>('SELECT version FROM schema_version LIMIT 1');
-		const currentVersion = row?.version ?? 0;
-
-		if (currentVersion < SCHEMA_VERSION) {
-			await this.exec(`
-				CREATE TABLE IF NOT EXISTS tags (
-					id          TEXT PRIMARY KEY,
-					name        TEXT NOT NULL,
-					description TEXT,
-					color       TEXT NOT NULL DEFAULT '#22c55e',
-					parent_id   TEXT,
-					sort_order  INTEGER NOT NULL DEFAULT 0,
-					created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-					updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-					FOREIGN KEY (parent_id) REFERENCES tags(id) ON DELETE SET NULL
-				)
-			`);
-
-			await this.exec(`
-				CREATE TABLE IF NOT EXISTS tag_applications (
-					id              TEXT PRIMARY KEY,
-					tag_id          TEXT NOT NULL,
-					file_path       TEXT NOT NULL,
-					start_offset    INTEGER NOT NULL,
-					end_offset      INTEGER NOT NULL,
-					selected_text   TEXT NOT NULL,
-					prefix          TEXT,
-					suffix          TEXT,
-					note            TEXT,
-					created_by      TEXT NOT NULL DEFAULT 'user',
-					created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-					FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-				)
-			`);
-
-			await this.exec('CREATE INDEX IF NOT EXISTS idx_tags_parent ON tags(parent_id)');
-			await this.exec('CREATE INDEX IF NOT EXISTS idx_app_tag ON tag_applications(tag_id)');
-			await this.exec('CREATE INDEX IF NOT EXISTS idx_app_file ON tag_applications(file_path)');
-
-			// Update version
-			if (currentVersion === 0) {
-				await this.run('INSERT INTO schema_version (version) VALUES (?)', [SCHEMA_VERSION]);
-			} else {
-				await this.run('UPDATE schema_version SET version = ?', [SCHEMA_VERSION]);
-			}
+	private async flush(): Promise<void> {
+		if (!this.store || !this.fileUri) {
+			return;
 		}
+		const json = JSON.stringify(this.store, null, '\t');
+		await this.fileService.writeFile(this.fileUri, VSBuffer.fromString(json));
+		this.dirty = false;
 	}
 
-	// -----------------------------------------------------------------------
-	// Low-level helpers
-	// -----------------------------------------------------------------------
-
-	private exec(sql: string): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			this.conn.exec(sql, (err: Error | null) => {
-				if (err) { reject(err); } else { resolve(); }
-			});
-		});
-	}
-
-	private run(sql: string, params: unknown[] = []): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			this.conn.run(sql, params, function (err: Error | null) {
-				if (err) { reject(err); } else { resolve(); }
-			});
-		});
-	}
-
-	private all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-		return new Promise<T[]>((resolve, reject) => {
-			this.conn.all(sql, params, (err: Error | null, rows: unknown[]) => {
-				if (err) { reject(err); } else { resolve((rows ?? []) as T[]); }
-			});
-		});
-	}
-
-	private getOne<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
-		return new Promise<T | undefined>((resolve, reject) => {
-			this.conn.get(sql, params, (err: Error | null, row: unknown) => {
-				if (err) { reject(err); } else { resolve(row as T | undefined); }
-			});
-		});
+	private scheduleSave(): void {
+		this.dirty = true;
+		this.saveScheduler.schedule();
 	}
 
 	// -----------------------------------------------------------------------
@@ -219,24 +147,29 @@ export class LeapfrogSQLiteDatabase {
 	// -----------------------------------------------------------------------
 
 	async getAllTags(): Promise<ITagRow[]> {
-		return this.all<ITagRow>(
-			'SELECT * FROM tags ORDER BY sort_order ASC, name ASC'
-		);
+		return this.data.tags
+			.slice()
+			.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 	}
 
 	async getAllTagsWithCounts(): Promise<ITagWithCountRow[]> {
-		return this.all<ITagWithCountRow>(`
-			SELECT t.*, COALESCE(c.cnt, 0) AS application_count
-			FROM tags t
-			LEFT JOIN (
-				SELECT tag_id, COUNT(*) AS cnt FROM tag_applications GROUP BY tag_id
-			) c ON c.tag_id = t.id
-			ORDER BY t.sort_order ASC, t.name ASC
-		`);
+		const apps = this.data.tag_applications;
+		const countMap = new Map<string, number>();
+		for (const app of apps) {
+			countMap.set(app.tag_id, (countMap.get(app.tag_id) ?? 0) + 1);
+		}
+
+		return this.data.tags
+			.slice()
+			.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+			.map(tag => ({
+				...tag,
+				application_count: countMap.get(tag.id) ?? 0,
+			}));
 	}
 
 	async getTag(id: string): Promise<ITagRow | undefined> {
-		return this.getOne<ITagRow>('SELECT * FROM tags WHERE id = ?', [id]);
+		return this.data.tags.find(t => t.id === id);
 	}
 
 	async insertTag(tag: {
@@ -247,17 +180,18 @@ export class LeapfrogSQLiteDatabase {
 		parent_id?: string;
 		sort_order?: number;
 	}): Promise<void> {
-		await this.run(
-			'INSERT INTO tags (id, name, description, color, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-			[
-				tag.id,
-				tag.name,
-				tag.description ?? null,
-				tag.color,
-				tag.parent_id ?? null,
-				tag.sort_order ?? 0,
-			]
-		);
+		const now = new Date().toISOString();
+		this.data.tags.push({
+			id: tag.id,
+			name: tag.name,
+			description: tag.description ?? null,
+			color: tag.color,
+			parent_id: tag.parent_id ?? null,
+			sort_order: tag.sort_order ?? 0,
+			created_at: now,
+			updated_at: now,
+		});
+		this.scheduleSave();
 	}
 
 	async updateTag(id: string, data: {
@@ -267,30 +201,36 @@ export class LeapfrogSQLiteDatabase {
 		parent_id?: string | null;
 		sort_order?: number;
 	}): Promise<void> {
-		const sets: string[] = [];
-		const params: unknown[] = [];
-
-		if (data.name !== undefined) { sets.push('name = ?'); params.push(data.name); }
-		if (data.description !== undefined) { sets.push('description = ?'); params.push(data.description); }
-		if (data.color !== undefined) { sets.push('color = ?'); params.push(data.color); }
-		if (data.parent_id !== undefined) { sets.push('parent_id = ?'); params.push(data.parent_id); }
-		if (data.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(data.sort_order); }
-
-		if (sets.length === 0) {
+		const tag = this.data.tags.find(t => t.id === id);
+		if (!tag) {
 			return;
 		}
 
-		sets.push('updated_at = datetime(\'now\')');
-		params.push(id);
+		if (data.name !== undefined) { tag.name = data.name; }
+		if (data.description !== undefined) { tag.description = data.description; }
+		if (data.color !== undefined) { tag.color = data.color; }
+		if (data.parent_id !== undefined) { tag.parent_id = data.parent_id; }
+		if (data.sort_order !== undefined) { tag.sort_order = data.sort_order; }
 
-		await this.run(
-			`UPDATE tags SET ${sets.join(', ')} WHERE id = ?`,
-			params
-		);
+		tag.updated_at = new Date().toISOString();
+		this.scheduleSave();
 	}
 
 	async deleteTag(id: string): Promise<void> {
-		await this.run('DELETE FROM tags WHERE id = ?', [id]);
+		// Cascade: remove all applications for this tag
+		this.data.tag_applications = this.data.tag_applications.filter(a => a.tag_id !== id);
+
+		// SET NULL parent_id refs
+		for (const tag of this.data.tags) {
+			if (tag.parent_id === id) {
+				tag.parent_id = null;
+			}
+		}
+
+		// Remove the tag itself
+		this.data.tags = this.data.tags.filter(t => t.id !== id);
+
+		this.scheduleSave();
 	}
 
 	// -----------------------------------------------------------------------
@@ -298,25 +238,33 @@ export class LeapfrogSQLiteDatabase {
 	// -----------------------------------------------------------------------
 
 	async getApplicationsForTag(tagId: string): Promise<ITagApplicationRow[]> {
-		return this.all<ITagApplicationRow>(
-			'SELECT * FROM tag_applications WHERE tag_id = ? ORDER BY file_path ASC, start_offset ASC',
-			[tagId]
-		);
+		return this.data.tag_applications
+			.filter(a => a.tag_id === tagId)
+			.sort((a, b) => a.file_path.localeCompare(b.file_path) || a.start_offset - b.start_offset);
 	}
 
-	async getApplicationsForFile(filePath: string): Promise<ITagApplicationRow[]> {
-		return this.all<ITagApplicationRow>(
-			'SELECT * FROM tag_applications WHERE file_path = ? ORDER BY start_offset ASC',
-			[filePath]
-		);
+	async getApplicationsForFile(filePath: string): Promise<ITagApplicationWithTagRow[]> {
+		const tagMap = new Map<string, ITagRow>();
+		for (const tag of this.data.tags) {
+			tagMap.set(tag.id, tag);
+		}
+
+		return this.data.tag_applications
+			.filter(a => a.file_path === filePath)
+			.sort((a, b) => a.start_offset - b.start_offset)
+			.map(a => {
+				const tag = tagMap.get(a.tag_id);
+				return {
+					...a,
+					tag_name: tag?.name ?? '',
+					tag_color: tag?.color ?? '#22c55e',
+					tag_description: tag?.description ?? null,
+				};
+			});
 	}
 
 	async getApplicationCountForTag(tagId: string): Promise<number> {
-		const row = await this.getOne<{ cnt: number }>(
-			'SELECT COUNT(*) AS cnt FROM tag_applications WHERE tag_id = ?',
-			[tagId]
-		);
-		return row?.cnt ?? 0;
+		return this.data.tag_applications.filter(a => a.tag_id === tagId).length;
 	}
 
 	async insertTagApplication(app: {
@@ -331,28 +279,29 @@ export class LeapfrogSQLiteDatabase {
 		note?: string;
 		created_by?: string;
 	}): Promise<void> {
-		await this.run(
-			'INSERT INTO tag_applications (id, tag_id, file_path, start_offset, end_offset, selected_text, prefix, suffix, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-			[
-				app.id,
-				app.tag_id,
-				app.file_path,
-				app.start_offset,
-				app.end_offset,
-				app.selected_text,
-				app.prefix ?? null,
-				app.suffix ?? null,
-				app.note ?? null,
-				app.created_by ?? 'user',
-			]
-		);
+		this.data.tag_applications.push({
+			id: app.id,
+			tag_id: app.tag_id,
+			file_path: app.file_path,
+			start_offset: app.start_offset,
+			end_offset: app.end_offset,
+			selected_text: app.selected_text,
+			prefix: app.prefix ?? null,
+			suffix: app.suffix ?? null,
+			note: app.note ?? null,
+			created_by: app.created_by ?? 'user',
+			created_at: new Date().toISOString(),
+		});
+		this.scheduleSave();
 	}
 
 	async removeTagApplication(id: string): Promise<void> {
-		await this.run('DELETE FROM tag_applications WHERE id = ?', [id]);
+		this.data.tag_applications = this.data.tag_applications.filter(a => a.id !== id);
+		this.scheduleSave();
 	}
 
 	async removeApplicationsForFile(filePath: string): Promise<void> {
-		await this.run('DELETE FROM tag_applications WHERE file_path = ?', [filePath]);
+		this.data.tag_applications = this.data.tag_applications.filter(a => a.file_path !== filePath);
+		this.scheduleSave();
 	}
 }

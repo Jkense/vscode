@@ -20,9 +20,11 @@ import {
 	ILeapfrogTagWithCount,
 	ILeapfrogTagFileGroup,
 	ILeapfrogTagApplication,
+	ILeapfrogTagApplicationWithTag,
 	ITextAnchor,
 } from '../common/leapfrog.js';
-import { LeapfrogSQLiteDatabase, ITagWithCountRow } from './sqliteDatabase.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { LeapfrogJsonDatabase, ITagWithCountRow } from './sqliteDatabase.js';
 
 export class LeapfrogTagService extends Disposable implements ILeapfrogTagService {
 
@@ -34,7 +36,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	private readonly _onDidChangeTagApplications = this._register(new Emitter<void>());
 	readonly onDidChangeTagApplications: Event<void> = this._onDidChangeTagApplications.event;
 
-	private readonly db = new LeapfrogSQLiteDatabase();
+	private readonly db: LeapfrogJsonDatabase;
 
 	/** Cached tag tree - invalidated on writes */
 	private cachedTags: ILeapfrogTagWithCount[] | undefined;
@@ -42,8 +44,10 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
+		@IFileService fileService: IFileService,
 	) {
 		super();
+		this.db = this._register(new LeapfrogJsonDatabase(fileService));
 	}
 
 	// -----------------------------------------------------------------------
@@ -67,7 +71,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	}
 
 	override dispose(): void {
-		this.db.close().catch(err => this.logService.error('[Leapfrog] Error closing tag DB', err));
+		this.close().catch(err => this.logService.error('[Leapfrog] Error closing tag DB', err));
 		super.dispose();
 	}
 
@@ -223,7 +227,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		return Array.from(groupMap.values());
 	}
 
-	async getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplication[]> {
+	async getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplicationWithTag[]> {
 		const rows = await this.db.getApplicationsForFile(filePath);
 		return rows.map(row => ({
 			id: row.id,
@@ -235,6 +239,9 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 			note: row.note ?? undefined,
 			createdBy: row.created_by as 'user' | 'ai',
 			createdAt: new Date(row.created_at).getTime(),
+			tagName: row.tag_name,
+			tagColor: row.tag_color,
+			tagDescription: row.tag_description ?? undefined,
 		}));
 	}
 

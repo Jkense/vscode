@@ -89,6 +89,15 @@ export interface ILeapfrogTagApplication {
 }
 
 /**
+ * Tag application enriched with tag metadata (name, color, description)
+ */
+export interface ILeapfrogTagApplicationWithTag extends ILeapfrogTagApplication {
+	tagName: string;
+	tagColor: string;
+	tagDescription?: string;
+}
+
+/**
  * Leapfrog Transcript Segment interface
  */
 export interface ILeapfrogTranscriptSegment {
@@ -334,7 +343,7 @@ export interface ILeapfrogTagService {
 	applyTag(tagId: string, filePath: string, anchor: ITextAnchor, note?: string): Promise<ILeapfrogTagApplication>;
 	removeTagApplication(id: string): Promise<void>;
 	getApplicationsForTag(tagId: string): Promise<ILeapfrogTagFileGroup[]>;
-	getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplication[]>;
+	getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplicationWithTag[]>;
 }
 
 export const ILeapfrogTagService = createDecorator<ILeapfrogTagService>('leapfrogTagService');
