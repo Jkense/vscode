@@ -15,6 +15,7 @@
 
 import * as nls from '../../../../nls.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { ICodeEditor, IContentWidget, IContentWidgetPosition, ContentWidgetPositionPreference } from '../../../../editor/browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { IModelDeltaDecoration, TrackedRangeStickiness } from '../../../../editor/common/model.js';
@@ -655,6 +656,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 	private decorationIds: string[] = [];
 	private decorationMap: Map<string, string> = new Map(); // decorationId -> applicationId
 	private syncing = false;
+	private readonly syncScheduler = this._register(new RunOnceScheduler(() => this.syncAnchorsToModel(), 300));
 	private readonly styleManager = new TagColorStyleManager();
 
 	private floatingWidget: TagFloatingMenuWidget | undefined;
@@ -789,6 +791,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 		const model = editor.getModel();
 		this.editorListeners.add(model.onWillDispose(() => this.syncAnchorsToModel()));
 		this.editorListeners.add(editor.onDidBlurEditorText(() => this.syncAnchorsToModel()));
+		this.editorListeners.add(model.onDidChangeContent(() => this.syncScheduler.schedule()));
 	}
 
 	private async updateDecorations(): Promise<void> {
@@ -929,6 +932,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 	}
 
 	override dispose(): void {
+		this.syncScheduler.cancel();
 		this.syncAnchorsToModel();
 		this.styleManager.dispose();
 		if (this.floatingWidget) {
