@@ -190,7 +190,7 @@ export class ReferencesModel implements SymbolItemNavigation<FileItem | Referenc
 		return this._move(item, false) ?? item;
 	}
 
-	private _move(item: FileItem | ReferenceItem, fwd: boolean): ReferenceItem | void {
+	private _move(item: FileItem | ReferenceItem, fwd: boolean): ReferenceItem | undefined {
 
 		const delta = fwd ? +1 : -1;
 

@@ -653,6 +653,8 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 	static readonly ID = 'workbench.contrib.leapfrogTagDecorations';
 
 	private decorationIds: string[] = [];
+	private decorationMap: Map<string, string> = new Map(); // decorationId -> applicationId
+	private syncing = false;
 	private readonly styleManager = new TagColorStyleManager();
 
 	private floatingWidget: TagFloatingMenuWidget | undefined;
@@ -671,15 +673,45 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 			this.setupEditorListeners();
 		}));
 
-		// Refresh decorations when tag applications change
-		this._register(this.tagService.onDidChangeTagApplications(() => this.updateDecorations()));
+		// Refresh decorations when tag applications change (skip if we triggered the change ourselves)
+		this._register(this.tagService.onDidChangeTagApplications(() => {
+			if (!this.syncing) { this.updateDecorations(); }
+		}));
 
 		// Initial setup
 		this.setupEditorListeners();
 		this.updateDecorations();
 	}
 
+	private syncAnchorsToModel(): void {
+		const editor = this.editorService.activeTextEditorControl as ICodeEditor | undefined;
+		if (!editor?.hasModel() || this.decorationMap.size === 0) {
+			return;
+		}
+		const model = editor.getModel();
+
+		const updates: { id: string; startOffset: number; endOffset: number; selectedText: string }[] = [];
+		for (const [decorationId, appId] of this.decorationMap) {
+			const range = model.getDecorationRange(decorationId);
+			if (!range) { continue; }
+			updates.push({
+				id: appId,
+				startOffset: model.getOffsetAt(range.getStartPosition()),
+				endOffset: model.getOffsetAt(range.getEndPosition()),
+				selectedText: model.getValueInRange(range),
+			});
+		}
+
+		if (updates.length > 0) {
+			this.syncing = true;
+			this.tagService.updateApplicationAnchors(updates).finally(() => { this.syncing = false; });
+		}
+	}
+
 	private setupEditorListeners(): void {
+		// Flush tracked positions from the previous editor before clearing
+		this.syncAnchorsToModel();
+
 		this.editorListeners.clear();
 
 		// Remove old floating widget
@@ -752,6 +784,11 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 				this.floatingWidget.hide();
 			}
 		}));
+
+		// Sync anchors when the model is about to be disposed or the editor loses focus
+		const model = editor.getModel();
+		this.editorListeners.add(model.onWillDispose(() => this.syncAnchorsToModel()));
+		this.editorListeners.add(editor.onDidBlurEditorText(() => this.syncAnchorsToModel()));
 	}
 
 	private async updateDecorations(): Promise<void> {
@@ -787,6 +824,8 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 		}
 
 		const newDecorations: IModelDeltaDecoration[] = [];
+		// Parallel array: appId for each highlight decoration, empty string for EOL decorations
+		const appIds: string[] = [];
 
 		// Track which lines have which tags (for EOL indicators)
 		const lineTagMap = new Map<number, { tagName: string; tagColor: string; tagDescription?: string }[]>();
@@ -807,6 +846,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 					},
 					options: getDecorationOptions(color, this.styleManager),
 				});
+				appIds.push(app.id);
 
 				// Collect tags for the end line (show indicator on last line of tagged range)
 				const endLine = endPos.lineNumber;
@@ -861,12 +901,21 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 					},
 					options: eolOptions,
 				});
+				appIds.push(''); // EOL decorations don't need tracking
 			}
 		}
 
 		editor.changeDecorations((accessor) => {
 			this.decorationIds = accessor.deltaDecorations(this.decorationIds, newDecorations);
 		});
+
+		// Build decoration-to-application mapping for highlight decorations
+		this.decorationMap.clear();
+		for (let i = 0; i < this.decorationIds.length; i++) {
+			if (appIds[i]) {
+				this.decorationMap.set(this.decorationIds[i], appIds[i]);
+			}
+		}
 	}
 
 	private clearDecorations(editor: ICodeEditor | undefined): void {
@@ -876,9 +925,11 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 			});
 		}
 		this.decorationIds = [];
+		this.decorationMap.clear();
 	}
 
 	override dispose(): void {
+		this.syncAnchorsToModel();
 		this.styleManager.dispose();
 		if (this.floatingWidget) {
 			const editor = this.editorService.activeTextEditorControl as ICodeEditor | undefined;

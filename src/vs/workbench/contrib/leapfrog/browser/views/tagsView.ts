@@ -18,7 +18,10 @@ import { ILocalizedString } from '../../../../../platform/action/common/action.j
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { $, append } from '../../../../../base/browser/dom.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAsyncDataSource, ITreeNode, ITreeRenderer } from '../../../../../base/browser/ui/tree/tree.js';
 import { IListVirtualDelegate, IIdentityProvider } from '../../../../../base/browser/ui/list/list.js';
@@ -328,6 +331,7 @@ export class LeapfrogTagsView extends ViewPane {
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IDialogService private readonly dialogService: IDialogService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super(options as IViewPaneOptions, keybindingService, contextMenuService, _configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 
@@ -401,6 +405,14 @@ export class LeapfrogTagsView extends ViewPane {
 
 		this._register(this.tree);
 
+		// Open file & select text when clicking a snippet or file group
+		this._register(this.tree.onDidChangeSelection(e => {
+			const element = e.elements[0];
+			if (element) {
+				this.onTreeElementSelected(element);
+			}
+		}));
+
 		// Set input to load data
 		this.tree.setInput(TAG_TREE_INPUT);
 	}
@@ -408,6 +420,45 @@ export class LeapfrogTagsView extends ViewPane {
 	private async refresh(): Promise<void> {
 		if (this.tree) {
 			await this.tree.updateChildren();
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Navigation
+	// -----------------------------------------------------------------------
+
+	private async onTreeElementSelected(element: TagTreeElement): Promise<void> {
+		if (element.type === 'tag') {
+			return;
+		}
+
+		const filePath = element.type === 'file'
+			? element.group.filePath
+			: element.application.fileId;
+		const resource = URI.file(filePath);
+
+		const pane = await this.editorService.openEditor({ resource });
+		if (!pane) {
+			return;
+		}
+
+		if (element.type === 'snippet') {
+			const control = pane.getControl() as ICodeEditor | undefined;
+			if (control && typeof control.getModel === 'function') {
+				const model = control.getModel();
+				if (model && typeof model.getPositionAt === 'function') {
+					const start = model.getPositionAt(element.application.startOffset);
+					const end = model.getPositionAt(element.application.endOffset);
+					const range = {
+						startLineNumber: start.lineNumber,
+						startColumn: start.column,
+						endLineNumber: end.lineNumber,
+						endColumn: end.column,
+					};
+					control.setSelection(range);
+					control.revealRangeInCenter(range);
+				}
+			}
 		}
 	}
 

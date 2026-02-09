@@ -304,4 +304,18 @@ export class LeapfrogJsonDatabase extends Disposable {
 		this.data.tag_applications = this.data.tag_applications.filter(a => a.file_path !== filePath);
 		this.scheduleSave();
 	}
+
+	async updateApplicationAnchors(updates: { id: string; start_offset: number; end_offset: number; selected_text: string }[]): Promise<void> {
+		for (const u of updates) {
+			const app = this.data.tag_applications.find(a => a.id === u.id);
+			if (app) {
+				app.start_offset = u.start_offset;
+				app.end_offset = u.end_offset;
+				app.selected_text = u.selected_text;
+			}
+		}
+		if (updates.length > 0) {
+			this.scheduleSave();
+		}
+	}
 }

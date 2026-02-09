@@ -246,6 +246,21 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	}
 
 	// -----------------------------------------------------------------------
+	// Anchor sync
+	// -----------------------------------------------------------------------
+
+	async updateApplicationAnchors(updates: { id: string; startOffset: number; endOffset: number; selectedText: string }[]): Promise<void> {
+		await this.db.updateApplicationAnchors(updates.map(u => ({
+			id: u.id,
+			start_offset: u.startOffset,
+			end_offset: u.endOffset,
+			selected_text: u.selectedText,
+		})));
+		this.invalidateCache();
+		this._onDidChangeTagApplications.fire();
+	}
+
+	// -----------------------------------------------------------------------
 	// Private helpers
 	// -----------------------------------------------------------------------
 

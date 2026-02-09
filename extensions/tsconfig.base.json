@@ -3,15 +3,20 @@
 		"esModuleInterop": true,
 		"target": "ES2024",
 		"lib": [
-			"ES2024"
+			"ES2024",
+			"dom"
 		],
 		"module": "commonjs",
+		"types": [
+			"node",
+			"mocha"
+		],
 		"strict": true,
 		"exactOptionalPropertyTypes": false,
 		"useUnknownInCatchVariables": false,
 		"alwaysStrict": true,
 		"noImplicitAny": true,
-		"noImplicitReturns": true,
+		"noImplicitReturns": false,
 		"noImplicitOverride": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,

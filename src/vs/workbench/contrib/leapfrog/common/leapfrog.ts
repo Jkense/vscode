@@ -344,6 +344,60 @@ export interface ILeapfrogTagService {
 	removeTagApplication(id: string): Promise<void>;
 	getApplicationsForTag(tagId: string): Promise<ILeapfrogTagFileGroup[]>;
 	getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplicationWithTag[]>;
+
+	// Anchor sync
+	updateApplicationAnchors(updates: { id: string; startOffset: number; endOffset: number; selectedText: string }[]): Promise<void>;
 }
 
 export const ILeapfrogTagService = createDecorator<ILeapfrogTagService>('leapfrogTagService');
+
+// ---------------------------------------------------------------------------
+// Transcription Service
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for a transcription request.
+ */
+export interface ILeapfrogTranscriptionOptions {
+	language?: string;
+	diarization?: boolean;
+}
+
+/**
+ * Service that manages audio/video transcription via AssemblyAI.
+ */
+export interface ILeapfrogTranscriptionService {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Submit a file for transcription.
+	 */
+	transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript>;
+
+	/**
+	 * Get the current state of a transcript (status, segments, speakers).
+	 */
+	getTranscript(transcriptId: string): Promise<ILeapfrogTranscript>;
+
+	/**
+	 * Check the processing status of a transcript.
+	 */
+	getStatus(transcriptId: string): Promise<ILeapfrogTranscript>;
+
+	/**
+	 * Rename a speaker in a completed transcript (local-only).
+	 */
+	renameSpeaker(transcriptId: string, speakerId: string, newName: string): Promise<void>;
+
+	/**
+	 * Fired when a transcript completes processing.
+	 */
+	readonly onDidTranscriptComplete: Event<ILeapfrogTranscript>;
+
+	/**
+	 * Fired when a transcript encounters an error.
+	 */
+	readonly onDidTranscriptError: Event<{ transcriptId: string; error: string }>;
+}
+
+export const ILeapfrogTranscriptionService = createDecorator<ILeapfrogTranscriptionService>('leapfrogTranscriptionService');

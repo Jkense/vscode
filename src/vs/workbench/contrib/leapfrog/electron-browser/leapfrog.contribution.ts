@@ -13,14 +13,18 @@
  * - File system integrations
  */
 
+import { URI } from '../../../../base/common/uri.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService } from '../common/leapfrog.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { FileOperation } from '../../../../platform/files/common/files.js';
+import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
+import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -64,6 +68,7 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 // Register services
 registerSingleton(ILeapfrogApiKeyService, LeapfrogApiKeyService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTagService, LeapfrogTagService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, InstantiationType.Delayed);
 
 /**
  * Contribution that initializes Leapfrog desktop services
@@ -76,10 +81,18 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
+		@IWorkingCopyFileService private readonly workingCopyFileService: IWorkingCopyFileService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Desktop contribution initialized');
 		this.initializeTagDatabase();
+
+		// Duplicate tag applications when files are copied
+		this._register(this.workingCopyFileService.onDidRunWorkingCopyFileOperation(e => {
+			if (e.operation === FileOperation.COPY) {
+				this.handleFileCopy(e.files);
+			}
+		}));
 	}
 
 	private async initializeTagDatabase(): Promise<void> {
@@ -91,6 +104,31 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 				this.logService.info('[Leapfrog] Tag database initialized for workspace:', projectPath);
 			} catch (err) {
 				this.logService.error('[Leapfrog] Failed to initialize tag database', err);
+			}
+		}
+	}
+
+	private async handleFileCopy(files: readonly { source?: URI; target: URI }[]): Promise<void> {
+		for (const { source, target } of files) {
+			if (!source) {
+				continue;
+			}
+			try {
+				const sourceApps = await this.tagService.getApplicationsForFile(source.fsPath);
+				for (const app of sourceApps) {
+					await this.tagService.applyTag(
+						app.tagId,
+						target.fsPath,
+						{
+							startOffset: app.startOffset,
+							endOffset: app.endOffset,
+							selectedText: app.selectedText,
+						},
+						app.note,
+					);
+				}
+			} catch (err) {
+				this.logService.error('[Leapfrog] Failed to duplicate tag applications on file copy', err);
 			}
 		}
 	}

@@ -6,11 +6,9 @@
 		"typeRoots": [
 			"./node_modules/@types"
 		],
-		"types": [
-			"node"
-		],
 		"lib": [
-			"WebWorker"
+			"WebWorker",
+			"DOM"
 		]
 	},
 	"include": [

@@ -122,7 +122,7 @@ class TypesModel implements SymbolItemNavigation<TypeItem>, SymbolItemEditorHigh
 		return this._move(from, false) ?? from;
 	}
 
-	private _move(item: TypeItem, fwd: boolean): TypeItem | void {
+	private _move(item: TypeItem, fwd: boolean): TypeItem | undefined {
 		if (item.children?.length) {
 			return fwd ? item.children[0] : tail(item.children);
 		}

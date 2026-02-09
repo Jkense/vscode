@@ -118,7 +118,7 @@ class CallsModel implements SymbolItemNavigation<CallItem>, SymbolItemEditorHigh
 		return this._move(from, false) ?? from;
 	}
 
-	private _move(item: CallItem, fwd: boolean): CallItem | void {
+	private _move(item: CallItem, fwd: boolean): CallItem | undefined {
 		if (item.children?.length) {
 			return fwd ? item.children[0] : tail(item.children);
 		}
