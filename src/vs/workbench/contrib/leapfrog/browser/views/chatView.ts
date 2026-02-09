@@ -17,13 +17,20 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { ILocalizedString } from '../../../../../platform/action/common/action.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { $, append } from '../../../../../base/browser/dom.js';
-import { LEAPFROG_CHAT_VIEW_ID, LEAPFROG_AVAILABLE_MODELS } from '../../common/leapfrog.js';
+import {
+	LEAPFROG_CHAT_VIEW_ID,
+	LEAPFROG_AVAILABLE_MODELS,
+	ILeapfrogAIService,
+	ILeapfrogApiKeyService,
+	ILeapfrogChatMessage,
+} from '../../common/leapfrog.js';
 import { LeapfrogConfigurationKeys } from '../../common/leapfrogConfiguration.js';
 
 interface ChatMessageElement {
 	role: 'user' | 'assistant' | 'system';
 	content: string;
 	element: HTMLElement;
+	contentElement: HTMLElement;
 }
 
 export class LeapfrogChatView extends ViewPane {
@@ -36,8 +43,11 @@ export class LeapfrogChatView extends ViewPane {
 	private inputTextarea: HTMLTextAreaElement | undefined;
 	private modelSelector: HTMLSelectElement | undefined;
 	private welcomeElement: HTMLElement | undefined;
+	private stopButton: HTMLButtonElement | undefined;
+	private sendButton: HTMLButtonElement | undefined;
 	private messages: ChatMessageElement[] = [];
 	private isProcessing = false;
+	private cancelStreaming = false;
 
 	constructor(
 		options: IViewletViewOptions,
@@ -50,6 +60,8 @@ export class LeapfrogChatView extends ViewPane {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IOpenerService openerService: IOpenerService,
 		@IHoverService hoverService: IHoverService,
+		@ILeapfrogAIService private readonly aiService: ILeapfrogAIService,
+		@ILeapfrogApiKeyService private readonly apiKeyService: ILeapfrogApiKeyService,
 	) {
 		super(options as IViewPaneOptions, keybindingService, contextMenuService, _configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 	}
@@ -169,9 +181,14 @@ export class LeapfrogChatView extends ViewPane {
 
 		const buttonContainer = append(this.inputContainer, $('.leapfrog-chat-buttons'));
 
-		const sendButton = append(buttonContainer, $('button.leapfrog-chat-send'));
-		sendButton.textContent = nls.localize('leapfrogChatSend', "Send");
-		sendButton.onclick = () => this.handleSend();
+		this.sendButton = append(buttonContainer, $('button.leapfrog-chat-send')) as HTMLButtonElement;
+		this.sendButton.textContent = nls.localize('leapfrogChatSend', "Send");
+		this.sendButton.onclick = () => this.handleSend();
+
+		this.stopButton = append(buttonContainer, $('button.leapfrog-chat-stop')) as HTMLButtonElement;
+		this.stopButton.textContent = nls.localize('leapfrogChatStop', "Stop");
+		this.stopButton.onclick = () => this.handleStop();
+		this.stopButton.style.display = 'none';
 
 		const clearButton = append(buttonContainer, $('button.leapfrog-chat-clear'));
 		clearButton.textContent = nls.localize('leapfrogChatClear', "Clear");
@@ -193,6 +210,10 @@ export class LeapfrogChatView extends ViewPane {
 		this.inputTextarea.style.height = 'auto';
 	}
 
+	private handleStop(): void {
+		this.cancelStreaming = true;
+	}
+
 	private sendMessage(content: string): void {
 		if (this.isProcessing) {
 			return;
@@ -208,22 +229,137 @@ export class LeapfrogChatView extends ViewPane {
 		this.addMessage('user', content);
 
 		// Set processing state
-		this.isProcessing = true;
+		this.setProcessingState(true);
 
-		// Simulate AI response (placeholder - will be replaced with actual AI service)
-		this.simulateAIResponse(content);
+		// Send to AI with streaming
+		this.sendToAI();
 	}
 
-	private addMessage(role: 'user' | 'assistant' | 'system', content: string): void {
-		if (!this.messagesContainer) {
+	private async sendToAI(): Promise<void> {
+		// Determine the selected model's provider
+		const selectedModelId = this.modelSelector?.value ?? 'gpt-4o';
+		const modelInfo = LEAPFROG_AVAILABLE_MODELS.find(m => m.id === selectedModelId);
+		const provider = modelInfo?.provider ?? 'openai';
+
+		// Check if API key is configured
+		const hasKey = await this.apiKeyService.hasApiKey(provider);
+		if (!hasKey) {
+			this.addMessage('system', `${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key is not configured. Please click "Configure API Keys" to set up your API key.`);
+			this.setProcessingState(false);
 			return;
+		}
+
+		// Build message history for the API
+		const chatMessages: ILeapfrogChatMessage[] = this.messages
+			.filter(m => m.role === 'user' || m.role === 'assistant')
+			.map(m => ({
+				role: m.role as 'user' | 'assistant',
+				content: m.content,
+			}));
+
+		// Create assistant message element for streaming
+		const assistantMsg = this.addMessage('assistant', '');
+
+		// Add typing indicator
+		const typingIndicator = this.addTypingIndicator();
+
+		this.cancelStreaming = false;
+
+		try {
+			const stream = this.aiService.stream(chatMessages, {
+				model: selectedModelId,
+			});
+
+			// Remove typing indicator when first chunk arrives
+			let firstChunk = true;
+			let fullContent = '';
+
+			for await (const chunk of stream) {
+				if (this.cancelStreaming) {
+					break;
+				}
+
+				if (firstChunk && typingIndicator) {
+					typingIndicator.remove();
+					firstChunk = false;
+				}
+
+				if (chunk.content) {
+					fullContent += chunk.content;
+					assistantMsg.content = fullContent;
+					assistantMsg.contentElement.textContent = fullContent;
+
+					// Scroll to bottom
+					if (this.messagesContainer) {
+						this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+					}
+				}
+
+				if (chunk.done) {
+					break;
+				}
+			}
+
+			// Ensure typing indicator is removed even if no chunks arrived
+			if (firstChunk && typingIndicator) {
+				typingIndicator.remove();
+			}
+
+			// If nothing was streamed (cancelled before first chunk), show a note
+			if (!fullContent && this.cancelStreaming) {
+				assistantMsg.content = '(Generation stopped)';
+				assistantMsg.contentElement.textContent = '(Generation stopped)';
+			}
+
+		} catch (err) {
+			// Remove typing indicator on error
+			if (typingIndicator) {
+				typingIndicator.remove();
+			}
+
+			const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+			assistantMsg.content = `Error: ${errorMessage}`;
+			assistantMsg.contentElement.textContent = `Error: ${errorMessage}`;
+			assistantMsg.element.classList.add('error');
+		} finally {
+			this.setProcessingState(false);
+		}
+	}
+
+	private setProcessingState(processing: boolean): void {
+		this.isProcessing = processing;
+
+		if (this.sendButton) {
+			this.sendButton.style.display = processing ? 'none' : '';
+		}
+		if (this.stopButton) {
+			this.stopButton.style.display = processing ? '' : 'none';
+		}
+		if (this.inputTextarea) {
+			this.inputTextarea.disabled = processing;
+		}
+	}
+
+	private addMessage(role: 'user' | 'assistant' | 'system', content: string): ChatMessageElement {
+		if (!this.messagesContainer) {
+			// Return a dummy element if container is not ready
+			const dummy = document.createElement('div');
+			return { role, content, element: dummy, contentElement: dummy };
 		}
 
 		const messageElement = append(this.messagesContainer, $(`.leapfrog-chat-message.${role}`));
 
 		const avatar = append(messageElement, $('.leapfrog-chat-avatar'));
-		// allow-any-unicode-next-line
-		avatar.textContent = role === 'user' ? '\u{1F464}' : '\u{1F438}';
+		if (role === 'user') {
+			// allow-any-unicode-next-line
+			avatar.textContent = '\u{1F464}';
+		} else if (role === 'system') {
+			// allow-any-unicode-next-line
+			avatar.textContent = '\u{26A0}';
+		} else {
+			// allow-any-unicode-next-line
+			avatar.textContent = '\u{1F438}';
+		}
 
 		const contentElement = append(messageElement, $('.leapfrog-chat-content'));
 		contentElement.textContent = content;
@@ -231,45 +367,16 @@ export class LeapfrogChatView extends ViewPane {
 		const messageData: ChatMessageElement = {
 			role,
 			content,
-			element: messageElement
+			element: messageElement,
+			contentElement,
 		};
 
 		this.messages.push(messageData);
 
 		// Scroll to bottom
 		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-	}
 
-	private simulateAIResponse(userMessage: string): void {
-		// Add typing indicator
-		const typingIndicator = this.addTypingIndicator();
-
-		// Simulate delay
-		setTimeout(() => {
-			if (typingIndicator) {
-				typingIndicator.remove();
-			}
-
-			// Generate placeholder response based on message
-			let response = '';
-			const lowerMessage = userMessage.toLowerCase();
-
-			if (lowerMessage.includes('theme') || lowerMessage.includes('pattern')) {
-				response = 'Based on your research data, I can identify several emerging themes:\n\n1. **User Frustration** - Multiple participants expressed difficulty with the current workflow\n2. **Desire for Simplicity** - A recurring theme of wanting more streamlined processes\n3. **Communication Gaps** - Several mentions of information not flowing between teams\n\nWould you like me to find specific quotes supporting any of these themes?';
-			} else if (lowerMessage.includes('tag') || lowerMessage.includes('suggest')) {
-				response = 'For the selected text, I suggest the following tags:\n\n- **Pain Point** - The participant is describing a specific frustration\n- **Feature Request** - There\'s an implicit suggestion for improvement\n- **Workflow Issue** - Related to how they complete their tasks\n\nWould you like me to apply any of these tags?';
-			} else if (lowerMessage.includes('find') || lowerMessage.includes('quote') || lowerMessage.includes('search')) {
-				response = 'I found 3 relevant quotes in your transcripts:\n\n1. *"I spend way too much time on this task..."* - Interview 2, Speaker A\n2. *"It\'s frustrating when the system doesn\'t..."* - Interview 5, Speaker B\n3. *"We need a better way to handle..."* - Interview 7, Speaker A\n\nClick on any quote to navigate to it in the transcript.';
-			} else if (lowerMessage.includes('summarize') || lowerMessage.includes('summary')) {
-				response = '**Key Findings Summary**\n\nAcross your 8 interviews, the main findings are:\n\n- **Primary Pain Point**: Process complexity (mentioned by 6/8 participants)\n- **Top Request**: Better integration between tools\n- **Satisfaction Level**: Mixed - high satisfaction with support, low with current tools\n- **Recommendation**: Focus on simplifying the core workflow\n\nWould you like a more detailed breakdown of any area?';
-			} else {
-				response = 'I understand you\'re asking about your qualitative research data. To provide the most helpful analysis, I\'d need access to your project files and transcripts.\n\n**Currently, I can help you with:**\n- Identifying themes and patterns\n- Suggesting tags for text\n- Finding relevant quotes\n- Summarizing findings\n\n**To get started:**\n1. Open a project in the Projects view\n2. Select text in a transcript to tag it\n3. Ask me specific questions about your data\n\nHow can I assist with your research today?';
-			}
-
-			this.addMessage('assistant', response);
-			this.isProcessing = false;
-
-		}, 1000 + Math.random() * 1000);
+		return messageData;
 	}
 
 	private addTypingIndicator(): HTMLElement | null {
@@ -305,8 +412,9 @@ export class LeapfrogChatView extends ViewPane {
 	}
 
 	private openApiKeySettings(): void {
-		// TODO: Open settings filtered to leapfrog API keys
-		console.log('Open API key settings');
+		// Open VS Code settings filtered to leapfrog AI configuration.
+		// Users can also open settings via Ctrl+, and search for "leapfrog.ai"
+		this.openerService.open('command:workbench.action.openSettings?%22leapfrog.ai%22');
 	}
 
 	protected override layoutBody(height: number, width: number): void {

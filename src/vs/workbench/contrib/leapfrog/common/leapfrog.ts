@@ -372,6 +372,11 @@ export interface ILeapfrogTranscriptionService {
 	readonly _serviceBrand: undefined;
 
 	/**
+	 * Initialize the transcription service with a project path for persistence.
+	 */
+	initialize(projectPath: string): Promise<void>;
+
+	/**
 	 * Submit a file for transcription.
 	 */
 	transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript>;
@@ -380,6 +385,11 @@ export interface ILeapfrogTranscriptionService {
 	 * Get the current state of a transcript (status, segments, speakers).
 	 */
 	getTranscript(transcriptId: string): Promise<ILeapfrogTranscript>;
+
+	/**
+	 * Get all persisted transcripts.
+	 */
+	getTranscripts(): Promise<ILeapfrogTranscript[]>;
 
 	/**
 	 * Check the processing status of a transcript.
@@ -403,3 +413,37 @@ export interface ILeapfrogTranscriptionService {
 }
 
 export const ILeapfrogTranscriptionService = createDecorator<ILeapfrogTranscriptionService>('leapfrogTranscriptionService');
+
+// ---------------------------------------------------------------------------
+// Auto-Commit Service
+// ---------------------------------------------------------------------------
+
+/**
+ * Service that automatically commits .leapfrog/ changes to git.
+ */
+export interface ILeapfrogAutoCommitService {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Initialize with the workspace path. Verifies git is available.
+	 */
+	initialize(workspacePath: string): Promise<void>;
+
+	/**
+	 * Notify that a change occurred. Descriptions are accumulated and
+	 * committed after a debounce delay.
+	 */
+	notifyChange(description: string): void;
+
+	/**
+	 * Force an immediate commit of pending changes.
+	 */
+	commitNow(): Promise<void>;
+
+	/**
+	 * Whether auto-commit is enabled (git available + setting enabled).
+	 */
+	readonly enabled: boolean;
+}
+
+export const ILeapfrogAutoCommitService = createDecorator<ILeapfrogAutoCommitService>('leapfrogAutoCommitService');

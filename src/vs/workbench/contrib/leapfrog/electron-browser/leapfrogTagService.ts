@@ -16,6 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { basename } from '../../../../base/common/path.js';
 import {
+	ILeapfrogAutoCommitService,
 	ILeapfrogTagService,
 	ILeapfrogTagWithCount,
 	ILeapfrogTagFileGroup,
@@ -24,7 +25,8 @@ import {
 	ITextAnchor,
 } from '../common/leapfrog.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import { LeapfrogJsonDatabase, ITagWithCountRow } from './sqliteDatabase.js';
+import { ITagWithCountRow } from './sqliteDatabase.js';
+import { LeapfrogFileStore } from './leapfrogFileStore.js';
 
 export class LeapfrogTagService extends Disposable implements ILeapfrogTagService {
 
@@ -36,7 +38,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	private readonly _onDidChangeTagApplications = this._register(new Emitter<void>());
 	readonly onDidChangeTagApplications: Event<void> = this._onDidChangeTagApplications.event;
 
-	private readonly db: LeapfrogJsonDatabase;
+	private readonly db: LeapfrogFileStore;
 
 	/** Cached tag tree - invalidated on writes */
 	private cachedTags: ILeapfrogTagWithCount[] | undefined;
@@ -45,9 +47,10 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IFileService fileService: IFileService,
+		@ILeapfrogAutoCommitService private readonly autoCommitService: ILeapfrogAutoCommitService,
 	) {
 		super();
-		this.db = this._register(new LeapfrogJsonDatabase(fileService));
+		this.db = this._register(new LeapfrogFileStore(fileService));
 	}
 
 	// -----------------------------------------------------------------------
@@ -108,6 +111,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 
 		this.invalidateCache();
 		this._onDidChangeTags.fire();
+		this.autoCommitService.notifyChange(`Created tag '${name}'`);
 
 		return {
 			id,
@@ -137,6 +141,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 
 		this.invalidateCache();
 		this._onDidChangeTags.fire();
+		this.autoCommitService.notifyChange(`Updated tag${data.name ? ` '${data.name}'` : ''}`);
 	}
 
 	async deleteTag(id: string): Promise<void> {
@@ -145,6 +150,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		this.invalidateCache();
 		this._onDidChangeTags.fire();
 		this._onDidChangeTagApplications.fire();
+		this.autoCommitService.notifyChange('Deleted tag');
 	}
 
 	// -----------------------------------------------------------------------
@@ -175,6 +181,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		this.invalidateCache();
 		this._onDidChangeTagApplications.fire();
 		this._onDidChangeTags.fire(); // count changed
+		this.autoCommitService.notifyChange('Applied tag');
 
 		return {
 			id,
@@ -194,6 +201,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		this.invalidateCache();
 		this._onDidChangeTagApplications.fire();
 		this._onDidChangeTags.fire(); // count changed
+		this.autoCommitService.notifyChange('Removed tag application');
 	}
 
 	async getApplicationsForTag(tagId: string): Promise<ILeapfrogTagFileGroup[]> {
@@ -258,6 +266,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		})));
 		this.invalidateCache();
 		this._onDidChangeTagApplications.fire();
+		this.autoCommitService.notifyChange('Updated application anchors');
 	}
 
 	// -----------------------------------------------------------------------

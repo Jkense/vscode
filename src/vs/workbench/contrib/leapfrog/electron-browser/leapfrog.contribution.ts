@@ -19,12 +19,14 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService } from '../common/leapfrog.js';
+import { ILeapfrogAIService, ILeapfrogApiKeyService, ILeapfrogAutoCommitService, ILeapfrogTagService, ILeapfrogTranscriptionService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { LeapfrogAIService } from './leapfrogAIService.js';
+import { LeapfrogAutoCommitService } from './leapfrogAutoCommitService.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 
@@ -68,7 +70,9 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 }
 
 // Register services
+registerSingleton(ILeapfrogAIService, LeapfrogAIService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogApiKeyService, LeapfrogApiKeyService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogAutoCommitService, LeapfrogAutoCommitService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTagService, LeapfrogTagService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, InstantiationType.Delayed);
 
@@ -104,6 +108,8 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
+		@ILeapfrogTranscriptionService private readonly transcriptionService: ILeapfrogTranscriptionService,
+		@ILeapfrogAutoCommitService private readonly autoCommitService: ILeapfrogAutoCommitService,
 		@IWorkingCopyFileService private readonly workingCopyFileService: IWorkingCopyFileService,
 	) {
 		super();
@@ -123,10 +129,16 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		if (folders.length > 0) {
 			const projectPath = folders[0].uri.fsPath;
 			try {
+				// Initialize auto-commit first so tag/transcription services can use it
+				await this.autoCommitService.initialize(projectPath);
+
 				await this.tagService.initialize(projectPath);
 				this.logService.info('[Leapfrog] Tag database initialized for workspace:', projectPath);
+
+				await this.transcriptionService.initialize(projectPath);
+				this.logService.info('[Leapfrog] Transcription service initialized for workspace:', projectPath);
 			} catch (err) {
-				this.logService.error('[Leapfrog] Failed to initialize tag database', err);
+				this.logService.error('[Leapfrog] Failed to initialize services', err);
 			}
 		}
 	}

@@ -15,11 +15,15 @@
  * `ILeapfrogTranscript` types.
  */
 
+import { URI } from '../../../../base/common/uri.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { joinPath } from '../../../../base/common/resources.js';
 import {
 	ILeapfrogTranscriptionService,
 	ILeapfrogTranscriptionOptions,
@@ -27,6 +31,7 @@ import {
 	ILeapfrogTranscriptSegment,
 	ILeapfrogTranscriptWord,
 	ILeapfrogSpeaker,
+	ILeapfrogAutoCommitService,
 } from '../common/leapfrog.js';
 
 const ASSEMBLYAI_BASE = 'https://api.assemblyai.com/v2';
@@ -54,12 +59,88 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	/** In-memory store for speaker name overrides (transcriptId → speakerId → name) */
 	private readonly speakerNames = new Map<string, Map<string, string>>();
 
+	/** In-memory cache of completed transcripts */
+	private readonly transcripts = new Map<string, ILeapfrogTranscript>();
+
+	/** Persistence directories */
+	private transcriptsDir: URI | undefined;
+	private speakersDir: URI | undefined;
+
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@ISecretStorageService private readonly secretStorageService: ISecretStorageService,
+		@IFileService private readonly fileService: IFileService,
+		@ILeapfrogAutoCommitService private readonly autoCommitService: ILeapfrogAutoCommitService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Transcription Service initialized');
+	}
+
+	// -----------------------------------------------------------------------
+	// Lifecycle
+	// -----------------------------------------------------------------------
+
+	async initialize(projectPath: string): Promise<void> {
+		const projectUri = URI.file(projectPath);
+		const leapfrogDir = joinPath(projectUri, '.leapfrog');
+		this.transcriptsDir = joinPath(leapfrogDir, 'transcripts');
+		this.speakersDir = joinPath(leapfrogDir, 'speakers');
+
+		// Ensure directories exist
+		for (const dir of [this.transcriptsDir, this.speakersDir]) {
+			try {
+				await this.fileService.createFolder(dir);
+			} catch {
+				// May already exist
+			}
+		}
+
+		// Load existing transcripts from disk
+		try {
+			const transcriptFiles = await this.fileService.resolve(this.transcriptsDir);
+			if (transcriptFiles.children) {
+				for (const child of transcriptFiles.children) {
+					if (child.name.endsWith('.json')) {
+						try {
+							const content = await this.fileService.readFile(child.resource);
+							const transcript: ILeapfrogTranscript = JSON.parse(content.value.toString());
+							this.transcripts.set(transcript.id, transcript);
+						} catch {
+							// Skip malformed files
+						}
+					}
+				}
+			}
+		} catch {
+			// Dir may be empty
+		}
+
+		// Load existing speaker overrides from disk
+		try {
+			const speakerFiles = await this.fileService.resolve(this.speakersDir);
+			if (speakerFiles.children) {
+				for (const child of speakerFiles.children) {
+					if (child.name.endsWith('.json')) {
+						try {
+							const content = await this.fileService.readFile(child.resource);
+							const data: { overrides: Record<string, string> } = JSON.parse(content.value.toString());
+							const transcriptId = child.name.replace('.json', '');
+							const map = new Map<string, string>();
+							for (const [speakerId, name] of Object.entries(data.overrides)) {
+								map.set(speakerId, name);
+							}
+							this.speakerNames.set(transcriptId, map);
+						} catch {
+							// Skip malformed files
+						}
+					}
+				}
+			}
+		} catch {
+			// Dir may be empty
+		}
+
+		this.logService.info('[Leapfrog] Transcription Service initialized with', this.transcripts.size, 'transcripts');
 	}
 
 	// -----------------------------------------------------------------------
@@ -92,7 +173,16 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	}
 
 	async getTranscript(transcriptId: string): Promise<ILeapfrogTranscript> {
+		// Check in-memory cache first
+		const cached = this.transcripts.get(transcriptId);
+		if (cached && cached.status === 'completed') {
+			return cached;
+		}
 		return this.getStatus(transcriptId);
+	}
+
+	async getTranscripts(): Promise<ILeapfrogTranscript[]> {
+		return Array.from(this.transcripts.values());
 	}
 
 	async getStatus(transcriptId: string): Promise<ILeapfrogTranscript> {
@@ -109,6 +199,10 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		}
 		map.set(speakerId, newName);
 		this.logService.info(`[Leapfrog] Speaker ${speakerId} renamed to "${newName}" in transcript ${transcriptId}`);
+
+		// Persist speaker overrides to disk
+		await this.persistSpeakerOverrides(transcriptId, map);
+		this.autoCommitService.notifyChange(`Renamed speaker to '${newName}'`);
 	}
 
 	// -----------------------------------------------------------------------
@@ -163,6 +257,9 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 				const transcript = this.mapRaw(raw);
 
 				if (transcript.status === 'completed') {
+					this.transcripts.set(transcript.id, transcript);
+					await this.persistTranscript(transcript);
+					this.autoCommitService.notifyChange('Transcript completed');
 					this._onDidTranscriptComplete.fire(transcript);
 					return;
 				}
@@ -276,6 +373,31 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 			endTime: w.end / 1000,
 			confidence: w.confidence ?? undefined,
 		};
+	}
+
+	private async persistTranscript(transcript: ILeapfrogTranscript): Promise<void> {
+		if (!this.transcriptsDir) {
+			return;
+		}
+		try {
+			const uri = joinPath(this.transcriptsDir, `${transcript.id}.json`);
+			await this.fileService.writeFile(uri, VSBuffer.fromString(JSON.stringify(transcript, null, '\t')));
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to persist transcript', err);
+		}
+	}
+
+	private async persistSpeakerOverrides(transcriptId: string, overrides: Map<string, string>): Promise<void> {
+		if (!this.speakersDir) {
+			return;
+		}
+		try {
+			const uri = joinPath(this.speakersDir, `${transcriptId}.json`);
+			const data = { overrides: Object.fromEntries(overrides) };
+			await this.fileService.writeFile(uri, VSBuffer.fromString(JSON.stringify(data, null, '\t')));
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to persist speaker overrides', err);
+		}
 	}
 
 	private sleep(ms: number): Promise<void> {

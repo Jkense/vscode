@@ -8,6 +8,8 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { LeapfrogTranscriptionService } from '../../electron-browser/leapfrogTranscriptionService.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { ILeapfrogAutoCommitService } from '../../common/leapfrog.js';
 
 // ---------------------------------------------------------------------------
 // Stubs
@@ -40,6 +42,16 @@ class InMemorySecretStorageService implements ISecretStorageService {
 	}
 }
 
+const NullFileService = {} as unknown as IFileService;
+
+const NullAutoCommitService: ILeapfrogAutoCommitService = {
+	_serviceBrand: undefined,
+	initialize: async () => { },
+	notifyChange: () => { },
+	commitNow: async () => { },
+	enabled: false,
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -56,6 +68,8 @@ suite('LeapfrogTranscriptionService', () => {
 		service = store.add(new LeapfrogTranscriptionService(
 			new NullLogService() as unknown as ILogService,
 			secretStorage as unknown as ISecretStorageService,
+			NullFileService,
+			NullAutoCommitService,
 		));
 	});
 

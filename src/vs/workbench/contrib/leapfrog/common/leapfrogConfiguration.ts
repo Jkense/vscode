@@ -15,6 +15,8 @@ export const enum LeapfrogConfigurationKeys {
 	TranscriptAutoSave = 'leapfrog.transcript.autoSave',
 	TranscriptShowTimestamps = 'leapfrog.transcript.showTimestamps',
 	TranscriptShowConfidence = 'leapfrog.transcript.showConfidence',
+	GitAutoCommit = 'leapfrog.git.autoCommit',
+	GitAutoCommitDelay = 'leapfrog.git.autoCommitDelay',
 }
 
 export interface ILeapfrogConfiguration {
@@ -31,6 +33,10 @@ export interface ILeapfrogConfiguration {
 		autoSave: boolean;
 		showTimestamps: boolean;
 		showConfidence: boolean;
+	};
+	git: {
+		autoCommit: boolean;
+		autoCommitDelay: number;
 	};
 }
 
@@ -111,6 +117,20 @@ export const leapfrogConfigurationSchema: IConfigurationNode = {
 			type: 'boolean',
 			default: false,
 			description: nls.localize('leapfrog.transcript.showConfidence', "Show confidence scores for AI-transcribed segments"),
+			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.GitAutoCommit]: {
+			type: 'boolean',
+			default: true,
+			description: nls.localize('leapfrog.git.autoCommit', "Automatically commit .leapfrog/ changes to git"),
+			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.GitAutoCommitDelay]: {
+			type: 'number',
+			default: 5000,
+			minimum: 1000,
+			maximum: 60000,
+			description: nls.localize('leapfrog.git.autoCommitDelay', "Delay in milliseconds before auto-committing changes"),
 			scope: ConfigurationScope.RESOURCE,
 		},
 	}
