@@ -73,6 +73,7 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 			audio_url: filePath,
 			speaker_labels: options?.diarization !== false,
 			language_detection: !options?.language,
+			sentiment_analysis: true,
 		};
 
 		if (options?.language) {
@@ -186,8 +187,9 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 
 	private mapRaw(raw: RawTranscript): ILeapfrogTranscript {
 		const utterances = raw.utterances ?? [];
+		const sentimentResults = raw.sentiment_analysis_results ?? [];
 		const speakers = this.extractSpeakers(utterances, raw.id);
-		const segments = this.mapUtterances(utterances);
+		const segments = this.mapUtterances(utterances, sentimentResults);
 
 		return {
 			id: raw.id,
@@ -230,16 +232,41 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		}));
 	}
 
-	private mapUtterances(utterances: RawUtterance[]): ILeapfrogTranscriptSegment[] {
-		return utterances.map((u, i) => ({
-			id: `seg_${i}`,
-			speakerId: u.speaker ?? undefined,
-			text: u.text,
-			startTime: u.start / 1000,
-			endTime: u.end / 1000,
-			confidence: u.confidence ?? undefined,
-			words: (u.words ?? []).map(this.mapWord),
-		}));
+	private mapUtterances(utterances: RawUtterance[], sentimentResults: RawSentimentResult[]): ILeapfrogTranscriptSegment[] {
+		return utterances.map((u, i) => {
+			// Match sentiment by finding a result whose time range overlaps this utterance
+			const sentiment = this.matchSentiment(u.start, u.end, sentimentResults);
+
+			return {
+				id: `seg_${i}`,
+				speakerId: u.speaker ?? undefined,
+				text: u.text,
+				startTime: u.start / 1000,
+				endTime: u.end / 1000,
+				confidence: u.confidence ?? undefined,
+				sentiment: sentiment?.sentiment as ILeapfrogTranscriptSegment['sentiment'],
+				sentimentConfidence: sentiment?.confidence ?? undefined,
+				words: (u.words ?? []).map(this.mapWord),
+			};
+		});
+	}
+
+	private matchSentiment(startMs: number, endMs: number, results: RawSentimentResult[]): RawSentimentResult | undefined {
+		// Find the sentiment result that best overlaps with this utterance
+		let best: RawSentimentResult | undefined;
+		let bestOverlap = 0;
+
+		for (const r of results) {
+			const overlapStart = Math.max(startMs, r.start);
+			const overlapEnd = Math.min(endMs, r.end);
+			const overlap = overlapEnd - overlapStart;
+			if (overlap > bestOverlap) {
+				bestOverlap = overlap;
+				best = r;
+			}
+		}
+
+		return best;
 	}
 
 	private mapWord(w: RawWord): ILeapfrogTranscriptWord {
@@ -269,6 +296,15 @@ interface RawTranscript {
 	audio_duration?: number;
 	utterances?: RawUtterance[];
 	words?: RawWord[];
+	sentiment_analysis_results?: RawSentimentResult[];
+}
+
+interface RawSentimentResult {
+	text: string;
+	sentiment: string;
+	confidence: number;
+	start: number;
+	end: number;
 }
 
 interface RawUtterance {

@@ -293,8 +293,9 @@ import './contrib/customEditor/browser/customEditor.contribution.js';
 // External Uri Opener
 import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 
-// Extensions Management - Disabled for Leapfrog
-// import './contrib/extensions/browser/extensions.contribution.js';
+// Extensions Management - Service registration required for extension host proxy
+import './contrib/extensions/browser/extensions.contribution.js';
+// Extensions Marketplace UI - Disabled for Leapfrog
 // import './contrib/extensions/browser/extensionsViewlet.js';
 
 // Output View

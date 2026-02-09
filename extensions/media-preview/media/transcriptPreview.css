@@ -1,0 +1,325 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Reset & base */
+body {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	background: var(--vscode-editor-background);
+	color: var(--vscode-editor-foreground);
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+}
+
+/* Loading states (reuse media-preview pattern) */
+body.loading .loading-indicator {
+	display: block;
+}
+
+body.loading #media-container,
+body.loading #transcript-container {
+	display: none;
+}
+
+.loading-indicator {
+	display: none;
+	margin: 2em auto;
+	width: 2em;
+	height: 2em;
+	border: 3px solid var(--vscode-editor-foreground);
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
+
+.loading-error {
+	display: none;
+	text-align: center;
+	padding: 2em;
+}
+
+body.error .loading-error {
+	display: block;
+}
+
+body.error .loading-indicator,
+body.error #media-container,
+body.error #transcript-container {
+	display: none;
+}
+
+.open-file-link {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+}
+
+.open-file-link:hover {
+	text-decoration: underline;
+}
+
+/* Media container */
+#media-container {
+	flex-shrink: 0;
+	padding: 16px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-editorGroup-border));
+	background: var(--vscode-editor-background);
+}
+
+#media-container audio {
+	width: 100%;
+	max-width: 800px;
+}
+
+#media-container video {
+	width: 100%;
+	max-width: 800px;
+	max-height: 40vh;
+}
+
+/* Transcript container */
+#transcript-container {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	min-height: 0;
+}
+
+/* Transcript header */
+.transcript-header {
+	flex-shrink: 0;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 16px;
+	border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-editorGroup-border));
+	background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+
+.transcript-title {
+	font-weight: 600;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-editor-foreground));
+}
+
+.transcript-btn {
+	padding: 4px 12px;
+	font-size: 12px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: 2px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.transcript-btn:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.transcript-btn.hidden {
+	display: none;
+}
+
+/* Transcript status */
+.transcript-status {
+	flex-shrink: 0;
+	padding: 12px 16px;
+	text-align: center;
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.transcript-status.hidden {
+	display: none;
+}
+
+.transcript-status .spinner {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border: 2px solid var(--vscode-editor-foreground);
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+	margin-right: 8px;
+	vertical-align: middle;
+}
+
+.transcript-status.error {
+	color: var(--vscode-errorForeground);
+	background: var(--vscode-inputValidation-errorBackground, transparent);
+}
+
+.transcript-status .retry-btn {
+	margin-left: 8px;
+	padding: 2px 8px;
+	font-size: 11px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: 2px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	cursor: pointer;
+	font-family: inherit;
+}
+
+/* Transcript segments */
+.transcript-segments {
+	flex: 1;
+	overflow-y: auto;
+	padding: 8px 0;
+}
+
+.transcript-segments:empty::after {
+	content: 'No transcript available. Click "Order Transcript" to generate one.';
+	display: block;
+	padding: 24px 16px;
+	text-align: center;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+/* Single segment */
+.segment {
+	padding: 8px 16px;
+	border-left: 3px solid transparent;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.segment:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.segment.active {
+	border-left-color: var(--vscode-focusBorder, #007fd4);
+	background: var(--vscode-editor-selectionBackground, rgba(0, 127, 212, 0.1));
+}
+
+/* Segment header row */
+.segment-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+	flex-wrap: wrap;
+}
+
+/* Speaker badge */
+.speaker-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	font-weight: 600;
+	color: #fff;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.speaker-badge:hover {
+	opacity: 0.85;
+}
+
+/* Timestamp */
+.segment-timestamp {
+	font-size: 11px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.segment-timestamp:hover {
+	text-decoration: underline;
+}
+
+/* Sentiment indicator */
+.sentiment-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: default;
+}
+
+.sentiment-indicator.positive {
+	background: rgba(34, 197, 94, 0.2);
+	color: #22c55e;
+}
+
+.sentiment-indicator.negative {
+	background: rgba(239, 68, 68, 0.2);
+	color: #ef4444;
+}
+
+.sentiment-indicator.neutral {
+	background: rgba(156, 163, 175, 0.2);
+	color: #9ca3af;
+}
+
+/* Confidence */
+.segment-confidence {
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+}
+
+/* Segment text */
+.segment-text {
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--vscode-editor-foreground);
+	word-wrap: break-word;
+}
+
+/* Word-level highlighting */
+.segment-text .word {
+	transition: background 0.1s, color 0.1s;
+	border-radius: 2px;
+	padding: 0 1px;
+}
+
+.segment-text .word.active {
+	background: var(--vscode-editor-wordHighlightBackground, rgba(87, 169, 255, 0.25));
+	font-weight: 600;
+}
+
+/* Speaker rename input */
+.speaker-rename-input {
+	font-size: 11px;
+	font-family: inherit;
+	padding: 1px 6px;
+	border: 1px solid var(--vscode-focusBorder);
+	border-radius: 2px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	outline: none;
+	width: 120px;
+}
+
+/* Hidden utility */
+.hidden {
+	display: none !important;
+}

@@ -33,7 +33,11 @@ export class MainThreadWebviewManager extends Disposable {
 		const webviewViews = this._register(instantiationService.createInstance(MainThreadWebviewsViews, context, webviews));
 		context.set(extHostProtocol.MainContext.MainThreadWebviewViews, webviewViews);
 
-		const chatOutputRenderers = this._register(instantiationService.createInstance(MainThreadChatOutputRenderer, context, webviews));
-		context.set(extHostProtocol.MainContext.MainThreadChatOutputRenderer, chatOutputRenderers);
+		try {
+			const chatOutputRenderers = this._register(instantiationService.createInstance(MainThreadChatOutputRenderer, context, webviews));
+			context.set(extHostProtocol.MainContext.MainThreadChatOutputRenderer, chatOutputRenderers);
+		} catch {
+			// Chat output renderer service may not be registered (e.g. Leapfrog fork)
+		}
 	}
 }

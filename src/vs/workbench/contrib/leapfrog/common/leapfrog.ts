@@ -107,6 +107,8 @@ export interface ILeapfrogTranscriptSegment {
 	startTime: number;  // Seconds
 	endTime: number;
 	confidence?: number;
+	sentiment?: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
+	sentimentConfidence?: number;
 	words?: ILeapfrogTranscriptWord[];
 }
 

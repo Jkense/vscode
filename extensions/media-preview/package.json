@@ -40,6 +40,21 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "%videoPreviewerLoop%"
+        },
+        "leapfrog.transcript.autoScroll": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically scroll to the active transcript segment during playback."
+        },
+        "leapfrog.transcript.showSentiment": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show sentiment analysis indicators for each transcript segment."
+        },
+        "leapfrog.transcript.wordHighlight": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Highlight individual words in the transcript as media plays."
         }
       }
     },
@@ -60,7 +75,7 @@
         "priority": "builtin",
         "selector": [
           {
-            "filenamePattern": "*.{mp3,wav,ogg,oga}"
+            "filenamePattern": "*.{mp3,wav,ogg,oga,m4a,flac,aac,wma}"
           }
         ]
       },
@@ -70,7 +85,7 @@
         "priority": "builtin",
         "selector": [
           {
-            "filenamePattern": "*.{mp4,webm}"
+            "filenamePattern": "*.{mp4,webm,mov,avi,mkv}"
           }
         ]
       }

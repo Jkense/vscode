@@ -305,7 +305,14 @@ export class ExtensionHostManager extends Disposable implements IExtensionHostMa
 		}
 
 		// Check that no named customers are missing
-		this._rpcProtocol.assertRegistered(mainProxyIdentifiers);
+		try {
+			this._rpcProtocol.assertRegistered(mainProxyIdentifiers);
+		} catch (err) {
+			// Some named customers may be unavailable in the Leapfrog fork
+			// (e.g. AI/Chat services are disabled). Log but don't crash.
+			this._logService.error(err);
+			errors.onUnexpectedError(err);
+		}
 
 		return extensionHostProxy;
 	}

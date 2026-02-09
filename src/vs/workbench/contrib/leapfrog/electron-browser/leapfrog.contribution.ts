@@ -23,6 +23,8 @@ import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionServ
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 
@@ -69,6 +71,27 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 registerSingleton(ILeapfrogApiKeyService, LeapfrogApiKeyService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTagService, LeapfrogTagService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, InstantiationType.Delayed);
+
+// ---------------------------------------------------------------------------
+// Transcription Commands
+// ---------------------------------------------------------------------------
+
+CommandsRegistry.registerCommand('leapfrog.transcribe', async (accessor: ServicesAccessor, filePath: string, options?: { language?: string; diarization?: boolean }) => {
+	const transcriptionService = accessor.get(ILeapfrogTranscriptionService);
+	const transcript = await transcriptionService.transcribe(filePath, options);
+	return { transcriptId: transcript.id, status: transcript.status };
+});
+
+CommandsRegistry.registerCommand('leapfrog.getTranscriptStatus', async (accessor: ServicesAccessor, transcriptId: string) => {
+	const transcriptionService = accessor.get(ILeapfrogTranscriptionService);
+	const transcript = await transcriptionService.getStatus(transcriptId);
+	return transcript;
+});
+
+CommandsRegistry.registerCommand('leapfrog.renameSpeaker', async (accessor: ServicesAccessor, transcriptId: string, speakerId: string, newName: string) => {
+	const transcriptionService = accessor.get(ILeapfrogTranscriptionService);
+	await transcriptionService.renameSpeaker(transcriptId, speakerId, newName);
+});
 
 /**
  * Contribution that initializes Leapfrog desktop services
