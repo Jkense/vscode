@@ -16,9 +16,15 @@ import { IViewDescriptorService } from '../../../../common/views.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ILocalizedString } from '../../../../../platform/action/common/action.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
-import { $, append } from '../../../../../base/browser/dom.js';
-import { LEAPFROG_CHAT_VIEW_ID, LEAPFROG_AVAILABLE_MODELS } from '../../common/leapfrog.js';
+import { $, append, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { ILeapfrogChatHistoryService, LEAPFROG_AVAILABLE_MODELS, ILeapfrogChatSession, ILeapfrogChatMessageData, ILeapfrogChatMessage, ILeapfrogChatAttachment, ILeapfrogAIService } from '../../common/leapfrog.js';
 import { LeapfrogConfigurationKeys } from '../../common/leapfrogConfiguration.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { ILogService } from '../../../../../platform/log/common/log.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 
 interface ChatMessageElement {
 	role: 'user' | 'assistant' | 'system';
@@ -26,18 +32,99 @@ interface ChatMessageElement {
 	element: HTMLElement;
 }
 
+interface ISlashCommand {
+	name: string;
+	description: string;
+	handler: (args: string, context: ISlashCommandContext) => Promise<string>;
+}
+
+interface ISlashCommandContext {
+	attachments: ILeapfrogChatAttachment[];
+}
+
+// Define available slash commands
+const SLASH_COMMANDS: ISlashCommand[] = [
+	{
+		name: 'ask',
+		description: 'Ask a question about your research data',
+		handler: async (args, ctx) => args || 'Ask a question about your research.',
+	},
+	{
+		name: 'tag',
+		description: 'Suggest tags for selected text or attachments',
+		handler: async (args, ctx) => {
+			let prompt = 'Please suggest relevant tags/codes for the following text. Consider themes, patterns, and categories that would help organize qualitative research data.';
+			if (ctx.attachments.length > 0) {
+				prompt += '\n\nAlso suggest tags that could apply across the entire attached file(s).';
+			}
+			if (args) {
+				prompt += `\n\nFocus: ${args}`;
+			}
+			return prompt;
+		},
+	},
+	{
+		name: 'search',
+		description: 'Search through your project files for relevant content',
+		handler: async (args, ctx) => {
+			let prompt = 'Search through my research data for content related to: ';
+			if (args) {
+				prompt += args;
+			} else {
+				prompt += 'themes and patterns.';
+			}
+			prompt += '\n\nReturn the most relevant findings with context.';
+			return prompt;
+		},
+	},
+	{
+		name: 'cross-reference',
+		description: 'Find related content across transcripts',
+		handler: async (args, ctx) => {
+			let prompt = 'Find related and cross-referenced content across my transcripts';
+			if (args) {
+				prompt += ` related to: ${args}`;
+			}
+			prompt += '. Identify connections, patterns, and recurring themes.';
+			return prompt;
+		},
+	},
+	{
+		name: 'summarize',
+		description: 'Generate a summary of selected content',
+		handler: async (args, ctx) => {
+			let prompt = 'Please provide a concise summary of the provided research data';
+			if (args) {
+				prompt += ` focusing on: ${args}`;
+			}
+			prompt += '.';
+			return prompt;
+		},
+	},
+];
+
 export class LeapfrogChatView extends ViewPane {
 
-	static readonly ID: string = LEAPFROG_CHAT_VIEW_ID;
+	static readonly ID: string = 'workbench.panel.chat.view';
 	static readonly NAME: ILocalizedString = nls.localize2('chat', "Chat");
 
+	// DOM elements
 	private messagesContainer: HTMLElement | undefined;
 	private inputContainer: HTMLElement | undefined;
 	private inputTextarea: HTMLTextAreaElement | undefined;
 	private modelSelector: HTMLSelectElement | undefined;
+	private sessionSelector: HTMLSelectElement | undefined;
 	private welcomeElement: HTMLElement | undefined;
+	private stopButton: HTMLElement | undefined;
+	private newChatButton: HTMLElement | undefined;
+
+	// State
 	private messages: ChatMessageElement[] = [];
 	private isProcessing = false;
+	private currentSessionId: string | undefined;
+	private currentStreamCancel: CancellationTokenSource | undefined;
+	private attachments: ILeapfrogChatAttachment[] = [];
+	private attachmentContainer: HTMLElement | undefined;
 
 	constructor(
 		options: IViewletViewOptions,
@@ -50,8 +137,18 @@ export class LeapfrogChatView extends ViewPane {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IOpenerService openerService: IOpenerService,
 		@IHoverService hoverService: IHoverService,
+		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
+		@ILeapfrogAIService private readonly aiService: ILeapfrogAIService,
+		@ILogService private readonly logService: ILogService,
+		@IFileDialogService private readonly fileDialogService: IFileDialogService,
+		@IFileService private readonly fileService: IFileService,
 	) {
 		super(options as IViewPaneOptions, keybindingService, contextMenuService, _configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
+
+		// Listen for session changes
+		this._register(this.chatHistoryService.onDidChangeSessions(() => {
+			this.refreshSessionSelector();
+		}));
 	}
 
 	protected override renderBody(container: HTMLElement): void {
@@ -59,8 +156,9 @@ export class LeapfrogChatView extends ViewPane {
 
 		container.classList.add('leapfrog-chat-view');
 
-		// Header with model selector
+		// Header with session selector and model selector
 		const header = append(container, $('.leapfrog-chat-header'));
+		this.renderSessionSelector(header);
 		this.renderModelSelector(header);
 
 		// Messages container
@@ -72,6 +170,148 @@ export class LeapfrogChatView extends ViewPane {
 		// Input container
 		this.inputContainer = append(container, $('.leapfrog-chat-input-container'));
 		this.renderInputArea();
+
+		// Load or create a session on initial render
+		this.loadOrCreateSession();
+	}
+
+	// -----------------------------------------------------------------------
+	// Session Management
+	// -----------------------------------------------------------------------
+
+	private async loadOrCreateSession(): Promise<void> {
+		try {
+			const sessions = await this.chatHistoryService.getSessions();
+
+			if (sessions.length > 0) {
+				// Load the most recent session
+				this.currentSessionId = sessions[0].id;
+			} else {
+				// Create a new session
+				const newSession = await this.chatHistoryService.createSession();
+				this.currentSessionId = newSession.id;
+			}
+
+			await this.loadSessionMessages();
+			this.refreshSessionSelector();
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to load or create session', err);
+		}
+	}
+
+	private async loadSessionMessages(): Promise<void> {
+		if (!this.currentSessionId) {
+			return;
+		}
+
+		try {
+			const session = await this.chatHistoryService.getSession(this.currentSessionId);
+			if (!session) {
+				return;
+			}
+
+			// Clear current messages
+			this.messages = [];
+			if (this.messagesContainer) {
+				while (this.messagesContainer.firstChild) {
+					this.messagesContainer.removeChild(this.messagesContainer.firstChild);
+				}
+			}
+
+			// Load messages from session
+			if (session.messages.length === 0) {
+				this.renderWelcomeMessage();
+			} else {
+				if (this.welcomeElement) {
+					this.welcomeElement.remove();
+					this.welcomeElement = undefined;
+				}
+
+				for (const msg of session.messages) {
+					this.addMessage(msg.role, msg.content);
+				}
+			}
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to load session messages', err);
+		}
+	}
+
+	private async switchSession(sessionId: string): Promise<void> {
+		// Save current session state (messages are already saved as they're sent)
+		this.currentSessionId = sessionId;
+		await this.loadSessionMessages();
+	}
+
+	private async createNewSession(): Promise<void> {
+		try {
+			const newSession = await this.chatHistoryService.createSession();
+			this.currentSessionId = newSession.id;
+			this.messages = [];
+			if (this.messagesContainer) {
+				while (this.messagesContainer.firstChild) {
+					this.messagesContainer.removeChild(this.messagesContainer.firstChild);
+				}
+				this.renderWelcomeMessage();
+			}
+			this.refreshSessionSelector();
+			if (this.sessionSelector) {
+				this.sessionSelector.value = newSession.id;
+			}
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to create new session', err);
+		}
+	}
+
+	private async refreshSessionSelector(): Promise<void> {
+		if (!this.sessionSelector) {
+			return;
+		}
+
+		try {
+			const sessions = await this.chatHistoryService.getSessions();
+
+			// Clear and repopulate
+			while (this.sessionSelector.firstChild) {
+				this.sessionSelector.removeChild(this.sessionSelector.firstChild);
+			}
+
+			for (const session of sessions) {
+				const option = document.createElement('option');
+				option.value = session.id;
+				option.textContent = session.title || 'Chat';
+				this.sessionSelector.appendChild(option);
+			}
+
+			if (this.currentSessionId) {
+				this.sessionSelector.value = this.currentSessionId;
+			}
+		} catch (err) {
+			this.logService.error('[Leapfrog] Failed to refresh session selector', err);
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// UI Rendering
+	// -----------------------------------------------------------------------
+
+	private renderSessionSelector(header: HTMLElement): void {
+		const selectorContainer = append(header, $('.leapfrog-chat-session-selector'));
+
+		this.newChatButton = append(selectorContainer, $('button.leapfrog-chat-new'));
+		this.newChatButton.textContent = nls.localize('leapfrogChatNew', "New Chat");
+		this.newChatButton.title = nls.localize('leapfrogChatNewTitle', "Start a new conversation");
+		this.newChatButton.onclick = () => this.createNewSession();
+
+		const label = append(selectorContainer, $('label'));
+		label.textContent = nls.localize('leapfrogChatSession', "Session:");
+
+		this.sessionSelector = append(selectorContainer, $('select')) as HTMLSelectElement;
+		this.sessionSelector.onchange = (e) => {
+			const sessionId = (e.target as HTMLSelectElement).value;
+			if (sessionId && sessionId !== this.currentSessionId) {
+				this.switchSession(sessionId);
+			}
+		};
 	}
 
 	private renderModelSelector(header: HTMLElement): void {
@@ -145,7 +385,17 @@ export class LeapfrogChatView extends ViewPane {
 			return;
 		}
 
+		// Attachment container
+		this.attachmentContainer = append(this.inputContainer, $('.leapfrog-chat-attachments'));
+		this.renderAttachmentUI();
+
 		const inputWrapper = append(this.inputContainer, $('.leapfrog-chat-input-wrapper'));
+
+		const attachButton = append(inputWrapper, $('button.leapfrog-chat-attach'));
+		// allow-any-unicode-next-line
+		attachButton.textContent = '📎';
+		attachButton.title = nls.localize('leapfrogChatAttach', "Attach file");
+		attachButton.onclick = () => this.pickFileAttachment();
 
 		this.inputTextarea = append(inputWrapper, $('textarea')) as HTMLTextAreaElement;
 		this.inputTextarea.placeholder = nls.localize('leapfrogChatPlaceholder', "Ask a question about your research...");
@@ -173,10 +423,111 @@ export class LeapfrogChatView extends ViewPane {
 		sendButton.textContent = nls.localize('leapfrogChatSend', "Send");
 		sendButton.onclick = () => this.handleSend();
 
+		this.stopButton = append(buttonContainer, $('button.leapfrog-chat-stop'));
+		this.stopButton.textContent = nls.localize('leapfrogChatStop', "Stop");
+		this.stopButton.style.display = 'none';
+		this.stopButton.onclick = () => this.cancelStream();
+
 		const clearButton = append(buttonContainer, $('button.leapfrog-chat-clear'));
 		clearButton.textContent = nls.localize('leapfrogChatClear', "Clear");
 		clearButton.onclick = () => this.clearChat();
 	}
+
+	// -----------------------------------------------------------------------
+	// Attachment Management
+	// -----------------------------------------------------------------------
+
+	private async pickFileAttachment(): Promise<void> {
+		try {
+			const files = await this.fileDialogService.showOpenDialog({
+				title: nls.localize('leapfrogChatAttachFile', "Attach file"),
+				canSelectFiles: true,
+				canSelectFolders: false,
+				canSelectMany: true,
+			});
+
+			if (!files || files.length === 0) {
+				return;
+			}
+
+			for (const fileUri of files) {
+				try {
+					const fileName = fileUri.path.split('/').pop() || 'file';
+					const stat = await this.fileService.stat(fileUri);
+
+					let content: string | undefined;
+					if (stat.size && stat.size < 1024 * 100) { // 100KB limit for inline content
+						try {
+							const fileContent = await this.fileService.readFile(fileUri);
+							content = fileContent.value.toString();
+						} catch {
+							// If reading fails, just use reference
+						}
+					}
+
+					const attachment: ILeapfrogChatAttachment = {
+						type: 'file',
+						uri: fileUri.toString(),
+						name: fileName,
+						content,
+					};
+
+					this.attachments.push(attachment);
+				} catch (err) {
+					this.logService.error('[Leapfrog] Failed to attach file', err);
+				}
+			}
+
+			this.renderAttachmentUI();
+		} catch (err) {
+			this.logService.error('[Leapfrog] File dialog error', err);
+		}
+	}
+
+	private renderAttachmentUI(): void {
+		if (!this.attachmentContainer) {
+			return;
+		}
+
+		// Clear existing attachments display
+		while (this.attachmentContainer.firstChild) {
+			this.attachmentContainer.removeChild(this.attachmentContainer.firstChild);
+		}
+
+		if (this.attachments.length === 0) {
+			return;
+		}
+
+		const label = append(this.attachmentContainer, $('label'));
+		label.textContent = nls.localize('leapfrogChatAttachments', "Attachments:");
+
+		const chipsContainer = append(this.attachmentContainer, $('.leapfrog-chat-attachment-chips'));
+
+		for (let i = 0; i < this.attachments.length; i++) {
+			const attachment = this.attachments[i];
+			const chip = append(chipsContainer, $('.leapfrog-chat-attachment-chip'));
+
+			const name = append(chip, $('span.leapfrog-chat-attachment-name'));
+			name.textContent = attachment.name;
+
+			const removeBtn = append(chip, $('button.leapfrog-chat-attachment-remove'));
+			removeBtn.textContent = '×';
+			removeBtn.title = nls.localize('leapfrogChatRemoveAttachment', "Remove");
+			removeBtn.onclick = () => {
+				this.attachments.splice(i, 1);
+				this.renderAttachmentUI();
+			};
+		}
+	}
+
+	private clearAttachments(): void {
+		this.attachments = [];
+		this.renderAttachmentUI();
+	}
+
+	// -----------------------------------------------------------------------
+	// Message Handling
+	// -----------------------------------------------------------------------
 
 	private handleSend(): void {
 		if (this.isProcessing || !this.inputTextarea) {
@@ -193,7 +544,7 @@ export class LeapfrogChatView extends ViewPane {
 		this.inputTextarea.style.height = 'auto';
 	}
 
-	private sendMessage(content: string): void {
+	private async sendMessage(content: string): Promise<void> {
 		if (this.isProcessing) {
 			return;
 		}
@@ -204,14 +555,65 @@ export class LeapfrogChatView extends ViewPane {
 			this.welcomeElement = undefined;
 		}
 
-		// Add user message
-		this.addMessage('user', content);
+		// Check for slash commands
+		const slashCommand = this.parseSlashCommand(content);
+		let finalContent = content;
+
+		if (slashCommand) {
+			try {
+				finalContent = await slashCommand.command.handler(slashCommand.args, { attachments: this.attachments });
+				// Display the original slash command in UI
+				this.addMessage('user', content);
+			} catch (err) {
+				this.logService.error('[Leapfrog] Slash command error', err);
+				finalContent = content;
+				this.addMessage('user', content);
+			}
+		} else {
+			// Add user message
+			this.addMessage('user', content);
+		}
+
+		// Persist user message to session
+		if (this.currentSessionId) {
+			const userMessage: ILeapfrogChatMessageData = {
+				id: generateUuid(),
+				role: 'user',
+				content,
+				timestamp: Date.now(),
+				attachments: this.attachments.length > 0 ? [...this.attachments] : undefined,
+			};
+			this.chatHistoryService.addMessage(this.currentSessionId, userMessage).catch(err =>
+				this.logService.error('[Leapfrog] Failed to save user message', err)
+			);
+		}
 
 		// Set processing state
 		this.isProcessing = true;
 
-		// Simulate AI response (placeholder - will be replaced with actual AI service)
-		this.simulateAIResponse(content);
+		// Get AI response with streaming (using processed command content)
+		this.streamResponse(finalContent);
+
+		// Clear attachments after sending
+		this.clearAttachments();
+	}
+
+	private parseSlashCommand(input: string): { command: ISlashCommand; args: string } | undefined {
+		const trimmed = input.trim();
+		if (!trimmed.startsWith('/')) {
+			return undefined;
+		}
+
+		const parts = trimmed.substring(1).split(/\s+/);
+		const commandName = parts[0].toLowerCase();
+		const args = parts.slice(1).join(' ');
+
+		const command = SLASH_COMMANDS.find(c => c.name === commandName);
+		if (!command) {
+			return undefined;
+		}
+
+		return { command, args };
 	}
 
 	private addMessage(role: 'user' | 'assistant' | 'system', content: string): void {
@@ -240,63 +642,151 @@ export class LeapfrogChatView extends ViewPane {
 		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
 	}
 
-	private simulateAIResponse(userMessage: string): void {
-		// Add typing indicator
-		const typingIndicator = this.addTypingIndicator();
+	private createMessageElement(role: 'user' | 'assistant' | 'system', content: string): HTMLElement {
+		const messageElement = $( `.leapfrog-chat-message.${role}`);
 
-		// Simulate delay
-		setTimeout(() => {
-			if (typingIndicator) {
-				typingIndicator.remove();
-			}
+		const avatar = append(messageElement, $('.leapfrog-chat-avatar'));
+		// allow-any-unicode-next-line
+		avatar.textContent = role === 'user' ? '\u{1F464}' : '\u{1F438}';
 
-			// Generate placeholder response based on message
-			let response = '';
-			const lowerMessage = userMessage.toLowerCase();
+		const contentElement = append(messageElement, $('.leapfrog-chat-content'));
+		contentElement.textContent = content;
 
-			if (lowerMessage.includes('theme') || lowerMessage.includes('pattern')) {
-				response = 'Based on your research data, I can identify several emerging themes:\n\n1. **User Frustration** - Multiple participants expressed difficulty with the current workflow\n2. **Desire for Simplicity** - A recurring theme of wanting more streamlined processes\n3. **Communication Gaps** - Several mentions of information not flowing between teams\n\nWould you like me to find specific quotes supporting any of these themes?';
-			} else if (lowerMessage.includes('tag') || lowerMessage.includes('suggest')) {
-				response = 'For the selected text, I suggest the following tags:\n\n- **Pain Point** - The participant is describing a specific frustration\n- **Feature Request** - There\'s an implicit suggestion for improvement\n- **Workflow Issue** - Related to how they complete their tasks\n\nWould you like me to apply any of these tags?';
-			} else if (lowerMessage.includes('find') || lowerMessage.includes('quote') || lowerMessage.includes('search')) {
-				response = 'I found 3 relevant quotes in your transcripts:\n\n1. *"I spend way too much time on this task..."* - Interview 2, Speaker A\n2. *"It\'s frustrating when the system doesn\'t..."* - Interview 5, Speaker B\n3. *"We need a better way to handle..."* - Interview 7, Speaker A\n\nClick on any quote to navigate to it in the transcript.';
-			} else if (lowerMessage.includes('summarize') || lowerMessage.includes('summary')) {
-				response = '**Key Findings Summary**\n\nAcross your 8 interviews, the main findings are:\n\n- **Primary Pain Point**: Process complexity (mentioned by 6/8 participants)\n- **Top Request**: Better integration between tools\n- **Satisfaction Level**: Mixed - high satisfaction with support, low with current tools\n- **Recommendation**: Focus on simplifying the core workflow\n\nWould you like a more detailed breakdown of any area?';
-			} else {
-				response = 'I understand you\'re asking about your qualitative research data. To provide the most helpful analysis, I\'d need access to your project files and transcripts.\n\n**Currently, I can help you with:**\n- Identifying themes and patterns\n- Suggesting tags for text\n- Finding relevant quotes\n- Summarizing findings\n\n**To get started:**\n1. Open a project in the Projects view\n2. Select text in a transcript to tag it\n3. Ask me specific questions about your data\n\nHow can I assist with your research today?';
-			}
-
-			this.addMessage('assistant', response);
-			this.isProcessing = false;
-
-		}, 1000 + Math.random() * 1000);
+		return messageElement;
 	}
 
-	private addTypingIndicator(): HTMLElement | null {
-		if (!this.messagesContainer) {
-			return null;
+	// -----------------------------------------------------------------------
+	// Streaming Response
+	// -----------------------------------------------------------------------
+
+	private async streamResponse(userContent?: string): Promise<void> {
+		if (!this.messagesContainer || !this.currentSessionId) {
+			this.isProcessing = false;
+			return;
 		}
 
-		const indicator = append(this.messagesContainer, $('.leapfrog-chat-typing'));
+		// Build chat messages from current conversation
+		const chatMessages: ILeapfrogChatMessage[] = this.messages.map(m => ({
+			role: m.role,
+			content: m.content,
+		}));
 
-		const avatar = append(indicator, $('.leapfrog-chat-avatar'));
-		// allow-any-unicode-next-line
-		avatar.textContent = '🐸';
-
-		const dots = append(indicator, $('.leapfrog-chat-typing-dots'));
-		for (let i = 0; i < 3; i++) {
-			append(dots, $('span.dot'));
+		// If userContent is provided (from slash command processing), replace the last user message
+		if (userContent && chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === 'user') {
+			chatMessages[chatMessages.length - 1].content = userContent;
 		}
 
-		this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+		// Build system message with attachment context
+		let systemContent = 'You are an AI assistant specialized in analyzing qualitative research data. Help the user identify themes, patterns, suggest codes/tags, find relevant quotes, and answer questions about their research.';
 
-		return indicator;
+		if (this.attachments.length > 0) {
+			systemContent += '\n\nAttached files:\n';
+			for (const att of this.attachments) {
+				if (att.content) {
+					systemContent += `\n--- ${att.name} ---\n${att.content}\n`;
+				} else {
+					systemContent += `- ${att.name} (${att.uri})\n`;
+				}
+			}
+		}
+
+		const systemMessage: ILeapfrogChatMessage = {
+			role: 'system',
+			content: systemContent,
+		};
+		chatMessages.unshift(systemMessage);
+
+		// Create assistant message placeholder
+		const messageElement = this.createMessageElement('assistant', '');
+		this.messagesContainer.appendChild(messageElement);
+		const contentElementQuery = messageElement.querySelector('.leapfrog-chat-content');
+		if (!contentElementQuery || !isHTMLElement(contentElementQuery)) {
+			this.isProcessing = false;
+			return;
+		}
+		const contentElement = contentElementQuery;
+
+		const messageData: ChatMessageElement = {
+			role: 'assistant',
+			content: '',
+			element: messageElement
+		};
+		this.messages.push(messageData);
+
+		// Setup cancellation
+		this.currentStreamCancel = new CancellationTokenSource();
+		if (this.stopButton) {
+			this.stopButton.style.display = 'inline-block';
+		}
+
+		let fullContent = '';
+
+		try {
+			for await (const chunk of this.aiService.stream(chatMessages, { model: this.modelSelector?.value }, this.currentStreamCancel.token)) {
+				if (this.currentStreamCancel.token.isCancellationRequested) {
+					break;
+				}
+
+				fullContent += chunk.content;
+				if (contentElement) {
+					contentElement.textContent = fullContent;
+				}
+				messageData.content = fullContent;
+
+				// Scroll to bottom
+				if (this.messagesContainer) {
+					this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+				}
+
+				if (chunk.done) {
+					break;
+				}
+			}
+
+			// Persist assistant message
+			const assistantMessage: ILeapfrogChatMessageData = {
+				id: generateUuid(),
+				role: 'assistant',
+				content: fullContent,
+				timestamp: Date.now(),
+				model: this.modelSelector?.value,
+			};
+			await this.chatHistoryService.addMessage(this.currentSessionId, assistantMessage);
+
+			// Auto-generate title from first user message if not set
+			const session = await this.chatHistoryService.getSession(this.currentSessionId);
+			if (session && session.title === 'New Chat') {
+				const title = await this.chatHistoryService.generateSessionTitle(this.currentSessionId);
+				await this.chatHistoryService.setSessionTitle(this.currentSessionId, title);
+			}
+
+		} catch (err) {
+			if (!(err instanceof Error) || !err.message.includes('cancelled')) {
+				const errorMessage = `Error: ${toErrorMessage(err)}`;
+				if (contentElement) {
+					contentElement.textContent = errorMessage;
+				}
+				messageData.content = errorMessage;
+				this.logService.error('[Leapfrog] Streaming error:', err);
+			}
+		} finally {
+			this.isProcessing = false;
+			this.currentStreamCancel = undefined;
+			if (this.stopButton) {
+				this.stopButton.style.display = 'none';
+			}
+		}
+	}
+
+	private cancelStream(): void {
+		if (this.currentStreamCancel) {
+			this.currentStreamCancel.cancel();
+		}
 	}
 
 	private clearChat(): void {
 		this.messages = [];
 		if (this.messagesContainer) {
-			// Clear all children using DOM manipulation instead of innerHTML
 			while (this.messagesContainer.firstChild) {
 				this.messagesContainer.removeChild(this.messagesContainer.firstChild);
 			}
@@ -306,7 +796,7 @@ export class LeapfrogChatView extends ViewPane {
 
 	private openApiKeySettings(): void {
 		// TODO: Open settings filtered to leapfrog API keys
-		console.log('Open API key settings');
+		this.logService.info('[Leapfrog] Open API key settings');
 	}
 
 	protected override layoutBody(height: number, width: number): void {

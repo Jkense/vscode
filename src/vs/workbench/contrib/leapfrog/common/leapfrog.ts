@@ -403,3 +403,78 @@ export interface ILeapfrogTranscriptionService {
 }
 
 export const ILeapfrogTranscriptionService = createDecorator<ILeapfrogTranscriptionService>('leapfrogTranscriptionService');
+
+// ---------------------------------------------------------------------------
+// Chat History Service
+// ---------------------------------------------------------------------------
+
+/**
+ * Chat attachment interface.
+ */
+export interface ILeapfrogChatAttachment {
+	type: 'file' | 'selection' | 'folder';
+	uri: string;  // Serialized URI
+	name: string;
+	range?: {
+		startLine: number;
+		startColumn: number;
+		endLine: number;
+		endColumn: number;
+	};
+	content?: string;  // For small selections/snippets
+}
+
+/**
+ * Individual chat message data.
+ */
+export interface ILeapfrogChatMessageData {
+	id: string;
+	role: 'user' | 'assistant' | 'system';
+	content: string;
+	timestamp: number;
+	model?: string;
+	attachments?: ILeapfrogChatAttachment[];
+}
+
+/**
+ * Chat session containing multiple messages.
+ */
+export interface ILeapfrogChatSession {
+	id: string;
+	title: string;  // Auto-generated from first user message or user-set
+	createdAt: string;
+	updatedAt: string;
+	messages: ILeapfrogChatMessageData[];
+	model?: string;
+}
+
+/**
+ * Chat history service for persisting sessions and messages.
+ */
+export interface ILeapfrogChatHistoryService {
+	readonly _serviceBrand: undefined;
+
+	// Lifecycle
+	initialize(projectPath: string): Promise<void>;
+	close(): Promise<void>;
+
+	// Events
+	readonly onDidChangeSessions: Event<void>;
+
+	// Session operations
+	getSessions(): Promise<ILeapfrogChatSession[]>;
+	getSession(id: string): Promise<ILeapfrogChatSession | undefined>;
+	createSession(title?: string): Promise<ILeapfrogChatSession>;
+	updateSession(id: string, data: Partial<ILeapfrogChatSession>): Promise<void>;
+	deleteSession(id: string): Promise<void>;
+
+	// Message operations
+	addMessage(sessionId: string, message: ILeapfrogChatMessageData): Promise<void>;
+	updateMessage(sessionId: string, messageId: string, content: string): Promise<void>;
+
+	// Utility
+	setSessionTitle(sessionId: string, title: string): Promise<void>;
+	generateSessionTitle(sessionId: string): Promise<string>;
+}
+
+export const ILeapfrogChatHistoryService = createDecorator<ILeapfrogChatHistoryService>('leapfrogChatHistoryService');

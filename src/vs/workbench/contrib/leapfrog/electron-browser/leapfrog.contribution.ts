@@ -19,7 +19,7 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService } from '../common/leapfrog.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
@@ -27,6 +27,8 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
+import { LeapfrogChatHistoryService } from './leapfrogChatHistoryService.js';
+import { LeapfrogAIService } from './leapfrogAIService.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -71,6 +73,8 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 registerSingleton(ILeapfrogApiKeyService, LeapfrogApiKeyService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTagService, LeapfrogTagService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogChatHistoryService, LeapfrogChatHistoryService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogAIService, LeapfrogAIService, InstantiationType.Delayed);
 
 // ---------------------------------------------------------------------------
 // Transcription Commands
@@ -104,11 +108,13 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
+		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
 		@IWorkingCopyFileService private readonly workingCopyFileService: IWorkingCopyFileService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Desktop contribution initialized');
 		this.initializeTagDatabase();
+		this.initializeChatDatabase();
 
 		// Duplicate tag applications when files are copied
 		this._register(this.workingCopyFileService.onDidRunWorkingCopyFileOperation(e => {
@@ -127,6 +133,19 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 				this.logService.info('[Leapfrog] Tag database initialized for workspace:', projectPath);
 			} catch (err) {
 				this.logService.error('[Leapfrog] Failed to initialize tag database', err);
+			}
+		}
+	}
+
+	private async initializeChatDatabase(): Promise<void> {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		if (folders.length > 0) {
+			const projectPath = folders[0].uri.fsPath;
+			try {
+				await this.chatHistoryService.initialize(projectPath);
+				this.logService.info('[Leapfrog] Chat history service initialized for workspace:', projectPath);
+			} catch (err) {
+				this.logService.error('[Leapfrog] Failed to initialize chat history service', err);
 			}
 		}
 	}
@@ -159,6 +178,9 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 	override dispose(): void {
 		this.tagService.close().catch(err =>
 			this.logService.error('[Leapfrog] Error closing tag database', err)
+		);
+		this.chatHistoryService.close().catch(err =>
+			this.logService.error('[Leapfrog] Error closing chat history database', err)
 		);
 		super.dispose();
 	}
