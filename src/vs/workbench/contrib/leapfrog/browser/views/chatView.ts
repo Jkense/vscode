@@ -17,7 +17,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { ILocalizedString } from '../../../../../platform/action/common/action.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { $, append, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { ILeapfrogChatHistoryService, LEAPFROG_AVAILABLE_MODELS, ILeapfrogChatSession, ILeapfrogChatMessageData, ILeapfrogChatMessage, ILeapfrogChatAttachment, ILeapfrogAIService } from '../../common/leapfrog.js';
+import { ILeapfrogChatHistoryService, LEAPFROG_AVAILABLE_MODELS, ILeapfrogChatMessageData, ILeapfrogChatMessage, ILeapfrogChatAttachment, ILeapfrogAIService } from '../../common/leapfrog.js';
 import { LeapfrogConfigurationKeys } from '../../common/leapfrogConfiguration.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';

@@ -7,6 +7,7 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { Event } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 
 /**
  * Leapfrog viewlet id.
@@ -200,7 +201,7 @@ export interface ILeapfrogAIService {
 
 	// Chat operations
 	chat(messages: ILeapfrogChatMessage[], config?: ILeapfrogChatConfig): Promise<ILeapfrogChatResponse>;
-	stream(messages: ILeapfrogChatMessage[], config?: ILeapfrogChatConfig): AsyncIterable<ILeapfrogChatStreamChunk>;
+	stream(messages: ILeapfrogChatMessage[], config?: ILeapfrogChatConfig, cancelToken?: CancellationToken): AsyncIterable<ILeapfrogChatStreamChunk>;
 
 	// Model info
 	getAvailableModels(): ILeapfrogAIModel[];
