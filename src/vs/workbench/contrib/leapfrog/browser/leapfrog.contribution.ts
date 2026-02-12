@@ -7,6 +7,7 @@
 import './services/stubServices.js';
 
 import './media/leapfrog.css';
+import './media/leapfrogChat.css';
 
 // Register tag application controller (editor decorations + apply tag command)
 import './tagApplicationController.js';
@@ -46,7 +47,7 @@ import {
 
 // Import views
 import { LeapfrogTagsView } from './views/tagsView.js';
-import { LeapfrogChatView } from './views/chatView.js';
+import { LeapfrogChatViewPane } from './views/leapfrogChatViewPane.js';
 
 // Register icons
 const leapfrogTagsViewIcon = registerIcon('leapfrog-tags-view-icon', Codicon.tag, localize('leapfrogTagsViewIcon', 'View icon of the Leapfrog Tags view.'));
@@ -207,11 +208,11 @@ class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribu
 
 		viewsRegistry.registerViews([tagsViewDescriptor], TAGS_VIEW_CONTAINER);
 
-		// Register chat view in auxiliary bar
+		// Register chat view in auxiliary bar (NEW: Using ChatViewPane integration)
 		const chatViewDescriptor: IViewDescriptor = {
 			id: LEAPFROG_CHAT_VIEW_ID,
 			name: localize2('chat', "Chat"),
-			ctorDescriptor: new SyncDescriptor(LeapfrogChatView),
+			ctorDescriptor: new SyncDescriptor(LeapfrogChatViewPane),
 			containerIcon: leapfrogChatViewIcon,
 			order: 1,
 			canToggleVisibility: false,

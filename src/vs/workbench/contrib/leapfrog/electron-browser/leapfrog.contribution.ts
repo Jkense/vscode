@@ -29,6 +29,8 @@ import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 import { LeapfrogChatHistoryService } from './leapfrogChatHistoryService.js';
 import { LeapfrogAIService } from './leapfrogAIService.js';
+import { LeapfrogChatService } from './leapfrogChatService.js';
+import { IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -69,12 +71,14 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 	}
 }
 
+
 // Register services
 registerSingleton(ILeapfrogApiKeyService, LeapfrogApiKeyService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTagService, LeapfrogTagService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogChatHistoryService, LeapfrogChatHistoryService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogAIService, LeapfrogAIService, InstantiationType.Delayed);
+registerSingleton(IChatService, LeapfrogChatService, InstantiationType.Delayed);
 
 // ---------------------------------------------------------------------------
 // Transcription Commands

@@ -10,6 +10,7 @@ export const enum LeapfrogConfigurationKeys {
 	DefaultModel = 'leapfrog.ai.defaultModel',
 	Temperature = 'leapfrog.ai.temperature',
 	MaxTokens = 'leapfrog.ai.maxTokens',
+	ChatDefaultModel = 'leapfrog.chat.defaultModel',
 	AutoSuggestTags = 'leapfrog.tags.autoSuggest',
 	TagColors = 'leapfrog.tags.defaultColors',
 	TranscriptAutoSave = 'leapfrog.transcript.autoSave',
@@ -22,6 +23,9 @@ export interface ILeapfrogConfiguration {
 		defaultModel: string;
 		temperature: number;
 		maxTokens: number;
+	};
+	chat: {
+		defaultModel: string;
 	};
 	tags: {
 		autoSuggest: boolean;
@@ -67,6 +71,19 @@ export const leapfrogConfigurationSchema: IConfigurationNode = {
 			minimum: 100,
 			maximum: 128000,
 			description: nls.localize('leapfrog.ai.maxTokens', "Maximum tokens for AI responses"),
+			scope: ConfigurationScope.APPLICATION,
+		},
+		[LeapfrogConfigurationKeys.ChatDefaultModel]: {
+			type: 'string',
+			default: 'gpt-4o',
+			enum: ['gpt-4o', 'gpt-4o-mini', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'],
+			enumDescriptions: [
+				nls.localize('leapfrog.chat.model.gpt4o', "OpenAI GPT-4o - Most capable model"),
+				nls.localize('leapfrog.chat.model.gpt4oMini', "OpenAI GPT-4o Mini - Fast and cost-effective"),
+				nls.localize('leapfrog.chat.model.claude35Sonnet', "Anthropic Claude 3.5 Sonnet - Balanced performance"),
+				nls.localize('leapfrog.chat.model.claude35Haiku', "Anthropic Claude 3.5 Haiku - Fast and efficient"),
+			],
+			description: nls.localize('leapfrog.chat.defaultModel', "Default AI model for chat interactions"),
 			scope: ConfigurationScope.APPLICATION,
 		},
 		[LeapfrogConfigurationKeys.AutoSuggestTags]: {
