@@ -1,8 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 /**
  * Leapfrog Chat View Styling
  *
  * Custom styling for the Leapfrog chat view pane.
- * Provides layout, message display, and input area styles.
+ * Provides layout, message display, input area, and tab bar styles.
  */
 
 .leapfrog-chat-viewpane {
@@ -11,7 +16,80 @@
 	height: 100%;
 	background-color: var(--vscode-editor-background);
 	color: var(--vscode-editor-foreground);
-	font-family: var(--vscode-font-family);
+	font-family: var(--monaco-monospace-font);
+}
+
+/* Tab bar container */
+.leapfrog-chat-viewpane .chat-tabs-container {
+	display: flex;
+	flex-direction: row;
+	background-color: var(--vscode-editorGroupHeader-tabsBackground);
+	border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
+	padding: 4px 8px;
+	min-height: 35px;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+/* ActionBar inside tab container */
+.leapfrog-chat-viewpane .chat-tabs-container .monaco-action-bar {
+	flex: 1;
+}
+
+.leapfrog-chat-viewpane .chat-tabs-container .monaco-action-bar .actions-container {
+	gap: 4px;
+	display: flex;
+	flex-wrap: nowrap;
+}
+
+/* Individual action item in tab bar */
+.leapfrog-chat-viewpane .chat-tabs-container .action-item {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+/* Tab label styling */
+.leapfrog-chat-viewpane .chat-tabs-container .action-label {
+	padding: 6px 12px;
+	border-radius: 3px;
+	font-size: 12px;
+	cursor: pointer;
+	color: var(--vscode-tab-inactiveForeground);
+	background-color: transparent;
+	transition: background-color 0.1s ease;
+	border-bottom: 2px solid transparent;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	max-width: 200px;
+}
+
+/* Active/checked tab */
+.leapfrog-chat-viewpane .chat-tabs-container .action-label.checked {
+	color: var(--vscode-tab-activeForeground);
+	background-color: var(--vscode-tab-activeBackground);
+	border-bottom: 2px solid var(--vscode-tab-activeBorder);
+}
+
+/* Hover state for tabs */
+.leapfrog-chat-viewpane .chat-tabs-container .action-label:hover:not(.checked) {
+	background-color: var(--vscode-tab-hoverBackground);
+}
+
+/* New session button (+) */
+.leapfrog-chat-viewpane .chat-tabs-container .chat-tab-new {
+	padding: 6px 10px;
+	font-size: 16px;
+	font-weight: 600;
+	margin-left: 4px;
+}
+
+/* Time back button (history icon) */
+.leapfrog-chat-viewpane .chat-tabs-container .chat-tab-timeback {
+	padding: 6px 10px;
+	margin-left: auto;
+	flex-shrink: 0;
 }
 
 /* Chat container */
@@ -19,6 +97,7 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	flex: 1;
 }
 
 /* Messages list - scrollable */
@@ -43,8 +122,8 @@
 
 /* User messages - right-aligned with blue background */
 .leapfrog-chat-viewpane .chat-message.user {
-	background-color: var(--vscode-editorInlineValue-background);
-	border-left: 3px solid var(--vscode-editorInlineValue-foreground);
+	background-color: var(--vscode-editor-findMatchBackground);
+	border-left: 3px solid var(--vscode-editor-foreground);
 	align-self: flex-end;
 	max-width: 85%;
 }
@@ -93,7 +172,7 @@
 	border: 1px solid var(--vscode-input-border);
 	border-radius: 3px;
 	resize: vertical;
-	font-family: var(--vscode-editor-font-family);
+	font-family: var(--monaco-monospace-font);
 	font-size: 13px;
 	line-height: 1.5;
 }

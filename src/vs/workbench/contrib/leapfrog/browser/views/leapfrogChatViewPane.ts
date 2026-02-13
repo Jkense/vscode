@@ -19,6 +19,9 @@ import { ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogChatMessage, 
 import { append, $ } from '../../../../../base/browser/dom.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
+import { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { ActionBar, ActionsOrientation } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import { Action, IAction } from '../../../../../base/common/actions.js';
 
 /**
  * Leapfrog Chat View Pane - Custom ViewPane Implementation
@@ -47,6 +50,10 @@ export class LeapfrogChatViewPane extends ViewPane {
 	private sendButton: HTMLButtonElement | undefined;
 	private isStreaming = false;
 	private currentSessionId: string | undefined;
+	private tabBar: ActionBar | undefined;
+	private tabActions: Map<string, Action> = new Map();
+	private openSessions: string[] = [];
+	private activeSessionIndex = 0;
 	protected override configurationService: IConfigurationService;
 
 	constructor(
@@ -63,6 +70,7 @@ export class LeapfrogChatViewPane extends ViewPane {
 		@ILogService private readonly logService: ILogService,
 		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
 		@ILeapfrogAIService private readonly aiService: ILeapfrogAIService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService,
 	) {
 		super(
 			options,
@@ -87,6 +95,10 @@ export class LeapfrogChatViewPane extends ViewPane {
 
 		container.classList.add('leapfrog-chat-viewpane');
 
+		// Create tab bar container at top
+		const tabBarContainer = append(container, $('div.chat-tabs-container'));
+		this.renderTabBar(tabBarContainer);
+
 		// Create main chat container
 		this.chatContainer = append(container, $('div.chat-container'));
 
@@ -97,7 +109,7 @@ export class LeapfrogChatViewPane extends ViewPane {
 		this.renderInputArea(this.chatContainer);
 
 		// Load and display existing messages
-		this.loadMessages();
+		this.initializeSessions();
 	}
 
 	private renderInputArea(container: HTMLElement): void {
@@ -129,19 +141,19 @@ export class LeapfrogChatViewPane extends ViewPane {
 
 	private async loadMessages(): Promise<void> {
 		try {
-			const sessions = await this.chatHistoryService.getSessions();
-			if (sessions.length > 0) {
-				const latestSession = sessions[0];
-				this.currentSessionId = latestSession.id;
-				if (latestSession.messages) {
-					for (const msg of latestSession.messages) {
+			// Clear existing messages when switching sessions
+			if (this.messagesList) {
+				this.messagesList.innerHTML = '';
+			}
+
+			// Load messages for current session
+			if (this.currentSessionId) {
+				const session = await this.chatHistoryService.getSession(this.currentSessionId);
+				if (session && session.messages) {
+					for (const msg of session.messages) {
 						this.addMessageToUI(msg.role as 'user' | 'assistant', msg.content);
 					}
 				}
-			} else {
-				// Create a new session if none exist
-				const newSession = await this.chatHistoryService.createSession('Chat');
-				this.currentSessionId = newSession.id;
 			}
 		} catch (error) {
 			this.logService.warn('[Leapfrog Chat] Failed to load messages:', error);
@@ -169,8 +181,8 @@ export class LeapfrogChatViewPane extends ViewPane {
 			};
 			await this.chatHistoryService.addMessage(this.currentSessionId, userMsg);
 
-			// Get chat config
-			const config = this.configurationService.getValue<any>('leapfrog.ai') || {};
+			// Get chat config (can contain model, temperature, etc.)
+			const config = this.configurationService.getValue<Record<string, unknown>>('leapfrog.ai') || {};
 
 			// Add loading placeholder
 			const loadingElement = this.addMessageToUI('assistant', nls.localize('leapfrogChatThinking', 'Thinking...'));
@@ -212,7 +224,7 @@ export class LeapfrogChatViewPane extends ViewPane {
 		} catch (error) {
 			this.logService.error('[Leapfrog Chat] Error:', error);
 			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			this.addMessageToUI('assistant', nls.localize('leapfrogChatError', 'Error: {0}', errorMsg));
+			this.addMessageToUI('assistant', nls.localize('leapfrogChatErrorGeneral', 'Error: {0}', errorMsg));
 		} finally {
 			this.isStreaming = false;
 			this.updateButtonStates();
@@ -253,6 +265,233 @@ export class LeapfrogChatViewPane extends ViewPane {
 	private updateButtonStates(): void {
 		if (this.sendButton && this.inputEditor) {
 			this.sendButton.disabled = this.isStreaming || !this.inputEditor.value.trim();
+		}
+	}
+
+	private renderTabBar(container: HTMLElement): void {
+		this.tabBar = this._register(new ActionBar(container, {
+			orientation: ActionsOrientation.HORIZONTAL,
+			ariaLabel: nls.localize('chatTabsLabel', 'Chat Sessions'),
+			ariaRole: 'tablist',
+			focusOnlyEnabledItems: true
+		}));
+	}
+
+	private async initializeSessions(): Promise<void> {
+		try {
+			const sessions = await this.chatHistoryService.getSessions();
+
+			if (sessions.length === 0) {
+				// Create first session
+				const newSession = await this.chatHistoryService.createSession('Chat');
+				this.openSessions = [newSession.id];
+				this.currentSessionId = newSession.id;
+			} else {
+				// Open the most recent session
+				this.openSessions = [sessions[0].id];
+				this.currentSessionId = sessions[0].id;
+			}
+
+			this.activeSessionIndex = 0;
+			await this.refreshTabBar();
+			await this.loadMessages();
+		} catch (error) {
+			this.logService.error('[Leapfrog Chat] Failed to initialize sessions:', error);
+		}
+	}
+
+	private async refreshTabBar(): Promise<void> {
+		if (!this.tabBar) {
+			return;
+		}
+
+		// Clear existing tabs
+		this.tabBar.clear();
+		this.tabActions.clear();
+
+		// Create actions for each open session
+		const actions: IAction[] = [];
+
+		for (let i = 0; i < this.openSessions.length; i++) {
+			const sessionId = this.openSessions[i];
+			const session = await this.chatHistoryService.getSession(sessionId);
+
+			if (!session) {
+				continue;
+			}
+
+			// Create tab action
+			const tabAction = new Action(
+				`session-tab-${sessionId}`,
+				this.getSessionTitle(session),
+				'chat-tab',
+				true,
+				() => this.switchToSession(i)
+			);
+
+			// Mark active tab as checked
+			tabAction.checked = (i === this.activeSessionIndex);
+
+			this.tabActions.set(sessionId, tabAction);
+			actions.push(tabAction);
+		}
+
+		// Add "New Session" button
+		const newSessionAction = new Action(
+			'new-session',
+			'+',
+			'chat-tab-new',
+			true,
+			() => this.createNewSession()
+		);
+		actions.push(newSessionAction);
+
+		// Add "Time Back" button (history icon)
+		const timeBackAction = new Action(
+			'time-back',
+			'$(history)',
+			'chat-tab-timeback',
+			true,
+			() => this.showSessionPicker()
+		);
+		actions.push(timeBackAction);
+
+		// Push all actions to tab bar
+		this.tabBar.push(actions);
+	}
+
+	private getSessionTitle(session: { title?: string; messages?: Array<{ role: string; content: string }> }): string {
+		// Use first 30 chars of title, or "New Chat"
+		if (session.title && session.title !== 'Chat') {
+			return session.title.length > 30
+				? session.title.substring(0, 27) + '...'
+				: session.title;
+		}
+		return nls.localize('newChat', 'New Chat');
+	}
+
+	private async switchToSession(index: number): Promise<void> {
+		if (index < 0 || index >= this.openSessions.length) {
+			return;
+		}
+
+		this.activeSessionIndex = index;
+		this.currentSessionId = this.openSessions[index];
+
+		// Refresh UI
+		await this.refreshTabBar();
+		await this.loadMessages();
+	}
+
+	private async createNewSession(): Promise<void> {
+		try {
+			const newSession = await this.chatHistoryService.createSession('Chat');
+
+			// Add to open sessions
+			this.openSessions.push(newSession.id);
+			this.activeSessionIndex = this.openSessions.length - 1;
+			this.currentSessionId = newSession.id;
+
+			// Refresh UI
+			await this.refreshTabBar();
+			await this.loadMessages();
+		} catch (error) {
+			this.logService.error('[Leapfrog Chat] Failed to create session:', error);
+		}
+	}
+
+	private async showSessionPicker(): Promise<void> {
+		try {
+			// Get all sessions (sorted by most recent)
+			const allSessions = await this.chatHistoryService.getSessions();
+
+			if (allSessions.length === 0) {
+				return;
+			}
+
+			// Create QuickPick items
+			const items: (IQuickPickItem & { sessionId?: string })[] = allSessions.map(session => ({
+				label: this.getSessionTitle(session),
+				description: this.formatSessionDate(session.updatedAt),
+				detail: this.getSessionPreview(session),
+				sessionId: session.id
+			}));
+
+			// Create and configure picker
+			type SessionPickItem = IQuickPickItem & { sessionId?: string };
+			const picker = this.quickInputService.createQuickPick<SessionPickItem>();
+			picker.placeholder = nls.localize('searchSessions', 'Search chat sessions...');
+			picker.matchOnLabel = true;
+			picker.matchOnDescription = true;
+			picker.matchOnDetail = true;
+			picker.items = items;
+
+			// Handle selection
+			picker.onDidAccept(() => {
+				const selected = picker.selectedItems[0] as SessionPickItem | undefined;
+				if (selected?.sessionId) {
+					this.openSessionFromPicker(selected.sessionId);
+				}
+				picker.hide();
+			});
+
+			// Cleanup on hide
+			picker.onDidHide(() => picker.dispose());
+
+			// Show picker (autofocuses automatically)
+			picker.show();
+
+		} catch (error) {
+			this.logService.error('[Leapfrog Chat] Failed to show session picker:', error);
+		}
+	}
+
+	private formatSessionDate(timestamp: string): string {
+		const date = new Date(timestamp);
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) {
+			return nls.localize('justNow', 'Just now');
+		} else if (diffMins < 60) {
+			return nls.localize('minsAgo', '{0} mins ago', diffMins);
+		} else if (diffHours < 24) {
+			return nls.localize('hoursAgo', '{0} hours ago', diffHours);
+		} else if (diffDays < 7) {
+			return nls.localize('daysAgo', '{0} days ago', diffDays);
+		} else {
+			return date.toLocaleDateString();
+		}
+	}
+
+	private getSessionPreview(session: { messages?: Array<{ role: string; content: string }> }): string {
+		// Get first user message as preview
+		const firstMsg = session.messages?.find(m => m.role === 'user');
+		if (firstMsg) {
+			const preview = firstMsg.content.substring(0, 80);
+			return preview.length < firstMsg.content.length ? preview + '...' : preview;
+		}
+		return nls.localize('emptySession', 'Empty session');
+	}
+
+	private async openSessionFromPicker(sessionId: string): Promise<void> {
+		// Check if already open
+		const existingIndex = this.openSessions.indexOf(sessionId);
+
+		if (existingIndex !== -1) {
+			// Already open, just switch to it
+			await this.switchToSession(existingIndex);
+		} else {
+			// Open as new tab
+			this.openSessions.push(sessionId);
+			this.activeSessionIndex = this.openSessions.length - 1;
+			this.currentSessionId = sessionId;
+
+			await this.refreshTabBar();
+			await this.loadMessages();
 		}
 	}
 }
