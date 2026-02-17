@@ -10,7 +10,7 @@ import { format, compare, splitLines } from '../../../../base/common/strings.js'
 import { extname, basename, isEqual } from '../../../../base/common/resources.js';
 import { areFunctions, assertReturnsDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IAction, toAction } from '../../../../base/common/actions.js';
+import { IAction } from '../../../../base/common/actions.js';
 import { Language } from '../../../../base/common/platform.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { IFileEditorInput, EditorResourceAccessor, IEditorPane, SideBySideEditor } from '../../../common/editor.js';
@@ -1142,8 +1142,8 @@ export class ChangeLanguageAction extends Action2 {
 		const preferencesService = accessor.get(IPreferencesService);
 		const configurationService = accessor.get(IConfigurationService);
 		const telemetryService = accessor.get(ITelemetryService);
-		const commandService = accessor.get(ICommandService);
-		const galleryService = accessor.get(IExtensionGalleryService);
+		// const commandService = accessor.get(ICommandService);
+		// const galleryService = accessor.get(IExtensionGalleryService);
 
 		const activeTextEditorControl = getCodeEditor(editorService.activeTextEditorControl);
 		if (!activeTextEditorControl) {
@@ -1197,14 +1197,15 @@ export class ChangeLanguageAction extends Action2 {
 		if (hasLanguageSupport && resource) {
 			const ext = extname(resource) || basename(resource);
 
-			if (galleryService.isEnabled()) {
-				galleryAction = toAction({
-					id: 'workbench.action.showLanguageExtensions',
-					label: localize('showLanguageExtensions', "Search Marketplace Extensions for '{0}'...", ext),
-					run: () => commandService.executeCommand('workbench.extensions.action.showExtensionsForLanguage', ext)
-				});
-				picks.unshift(galleryAction);
-			}
+		// Leapfrog: Marketplace extensions for language disabled
+// 			if (galleryService.isEnabled()) {
+// 				galleryAction = toAction({
+// 					id: 'workbench.action.showLanguageExtensions',
+// 					label: localize('showLanguageExtensions', "Search Marketplace Extensions for '{0}'...", ext),
+// 					run: () => commandService.executeCommand('workbench.extensions.action.showExtensionsForLanguage', ext)
+// 				});
+// 				picks.unshift(galleryAction);
+// 			}
 
 			configureLanguageSettings = { label: localize('configureModeSettings', "Configure '{0}' language based settings...", currentLanguageName) };
 			picks.unshift(configureLanguageSettings);

@@ -101,9 +101,10 @@ class NativeLocaleService implements ILocaleService {
 				if (languagePackItem.galleryExtension?.publisher.toLowerCase() !== 'ms-ceintl') {
 					// Show the view so the user can see the language pack that they should install
 					// as of now, there are no 3rd party language packs available on the Marketplace.
-					const viewlet = await this.paneCompositePartService.openPaneComposite(EXTENSIONS_VIEWLET_ID, ViewContainerLocation.Sidebar);
-					(viewlet?.getViewPaneContainer() as IExtensionsViewPaneContainer).search(`@id:${languagePackItem.extensionId}`);
-					return;
+					// Leapfrog: Extensions viewlet disabled
+				// const viewlet = await this.paneCompositePartService.openPaneComposite(EXTENSIONS_VIEWLET_ID, ViewContainerLocation.Sidebar);
+// 					(viewlet?.getViewPaneContainer() as IExtensionsViewPaneContainer).search(`@id:${languagePackItem.extensionId}`);
+// 					return;
 				}
 
 				await this.progressService.withProgress(

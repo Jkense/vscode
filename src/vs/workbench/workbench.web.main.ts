@@ -146,8 +146,8 @@ import './contrib/welcomeBanner/browser/welcomeBanner.contribution.js';
 // Webview
 import './contrib/webview/browser/webview.web.contribution.js';
 
-// Extensions Management
-import './contrib/extensions/browser/extensions.web.contribution.js';
+// Extensions Management - Disabled for Leapfrog (marketplace removal)
+// import './contrib/extensions/browser/extensions.web.contribution.js';
 
 // Terminal
 import './contrib/terminal/browser/terminal.web.contribution.js';

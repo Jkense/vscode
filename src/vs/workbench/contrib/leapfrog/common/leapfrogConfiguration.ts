@@ -16,6 +16,9 @@ export const enum LeapfrogConfigurationKeys {
 	TranscriptAutoSave = 'leapfrog.transcript.autoSave',
 	TranscriptShowTimestamps = 'leapfrog.transcript.showTimestamps',
 	TranscriptShowConfidence = 'leapfrog.transcript.showConfidence',
+	IndexIncludePatterns = 'leapfrog.index.includePatterns',
+	IndexExcludePatterns = 'leapfrog.index.excludePatterns',
+	IndexAutoIndex = 'leapfrog.index.autoIndex',
 }
 
 export interface ILeapfrogConfiguration {
@@ -35,6 +38,11 @@ export interface ILeapfrogConfiguration {
 		autoSave: boolean;
 		showTimestamps: boolean;
 		showConfidence: boolean;
+	};
+	index: {
+		includePatterns: string[];
+		excludePatterns: string[];
+		autoIndex: boolean;
 	};
 }
 
@@ -128,6 +136,30 @@ export const leapfrogConfigurationSchema: IConfigurationNode = {
 			type: 'boolean',
 			default: false,
 			description: nls.localize('leapfrog.transcript.showConfidence', "Show confidence scores for AI-transcribed segments"),
+			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.IndexIncludePatterns]: {
+			type: 'array',
+			items: {
+				type: 'string'
+			},
+			default: ['**/*.md', '**/*.markdown', '**/*.txt', '**/*.transcript.json'],
+			description: nls.localize('leapfrog.index.includePatterns', "File patterns to include in semantic indexing"),
+			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.IndexExcludePatterns]: {
+			type: 'array',
+			items: {
+				type: 'string'
+			},
+			default: ['.git', '.leapfrog', '.vscode', 'node_modules', '.DS_Store'],
+			description: nls.localize('leapfrog.index.excludePatterns', "File patterns to exclude from semantic indexing"),
+			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.IndexAutoIndex]: {
+			type: 'boolean',
+			default: true,
+			description: nls.localize('leapfrog.index.autoIndex', "Automatically index new or modified files"),
 			scope: ConfigurationScope.RESOURCE,
 		},
 	}

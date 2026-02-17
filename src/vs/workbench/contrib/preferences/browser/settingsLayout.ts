@@ -209,11 +209,12 @@ export const tocData: ITOCEntry<string> = {
 					label: localize('scm', "Source Control"),
 					settings: ['scm.*']
 				},
-				{
-					id: 'features/extensions',
-					label: localize('extensions', "Extensions"),
-					settings: ['extensions.*']
-				},
+// 				{
+// 			// Leapfrog: Extensions section removed (marketplace removed)
+// // 					id: 'features/extensions',
+// // 					label: localize('extensions', "Extensions"),
+// // 					settings: ['extensions.*']
+// // 				},
 				{
 					id: 'features/terminal',
 					label: localize('terminal', "Terminal"),

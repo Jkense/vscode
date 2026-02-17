@@ -1132,7 +1132,7 @@ export class SettingNewExtensionsRenderer implements ITreeRenderer<SettingsTreeN
 	templateId = SETTINGS_NEW_EXTENSIONS_TEMPLATE_ID;
 
 	constructor(
-		@ICommandService private readonly _commandService: ICommandService,
+		@ICommandService private readonly _commandService_disabled: ICommandService,
 	) {
 	}
 
@@ -1145,11 +1145,14 @@ export class SettingNewExtensionsRenderer implements ITreeRenderer<SettingsTreeN
 		toDispose.add(button);
 		toDispose.add(button.onDidClick(() => {
 			if (template.context) {
-				this._commandService.executeCommand('workbench.extensions.action.showExtensionsWithIds', template.context.extensionIds);
+			// Leapfrog: Marketplace extensions button disabled
+// 				this._commandService.executeCommand('workbench.extensions.action.showExtensionsWithIds', template.context.extensionIds);
 			}
 		}));
+		// Leapfrog: Extensions marketplace button hidden
 		button.label = localize('newExtensionsButtonLabel', "Show matching extensions");
 		button.element.classList.add('settings-new-extensions-button');
+		button.element.style.display = 'none';
 
 		const template: ISettingNewExtensionsTemplate = {
 			button,

@@ -40,6 +40,16 @@ export const LEAPFROG_CHAT_VIEWLET_ID = 'workbench.panel.chat';
 export const LEAPFROG_CHAT_VIEW_ID = 'workbench.panel.chat.view';
 
 /**
+ * Leapfrog Preferences viewlet id (standalone activity bar entry).
+ */
+export const LEAPFROG_PREFERENCES_VIEWLET_ID = 'workbench.view.preferences';
+
+/**
+ * Leapfrog Preferences view id.
+ */
+export const LEAPFROG_PREFERENCES_VIEW_ID = 'workbench.leapfrog.preferencesView';
+
+/**
  * Context Keys for Leapfrog views
  */
 export const LeapfrogViewletVisibleContext = new RawContextKey<boolean>('leapfrogViewletVisible', false, { type: 'boolean', description: localize('leapfrogViewletVisible', "True when the LEAPFROG viewlet is visible.") });
@@ -47,6 +57,7 @@ export const LeapfrogProjectsViewVisibleContext = new RawContextKey<boolean>('le
 export const LeapfrogTagsViewVisibleContext = new RawContextKey<boolean>('leapfrogTagsViewVisible', false, { type: 'boolean', description: localize('leapfrogTagsViewVisible', "True when the LEAPFROG Tags view is visible.") });
 export const LeapfrogTagsViewletVisibleContext = new RawContextKey<boolean>('leapfrogTagsViewletVisible', false, { type: 'boolean', description: localize('leapfrogTagsViewletVisible', "True when the LEAPFROG Tags viewlet is visible.") });
 export const LeapfrogChatViewVisibleContext = new RawContextKey<boolean>('leapfrogChatViewVisible', false, { type: 'boolean', description: localize('leapfrogChatViewVisible', "True when the LEAPFROG Chat view is visible.") });
+export const LeapfrogPreferencesViewletVisibleContext = new RawContextKey<boolean>('leapfrogPreferencesViewletVisible', false, { type: 'boolean', description: localize('leapfrogPreferencesViewletVisible', "True when the LEAPFROG Preferences viewlet is visible.") });
 
 /**
  * Leapfrog Project interface
@@ -568,3 +579,61 @@ export interface ILeapfrogIndexService {
 }
 
 export const ILeapfrogIndexService = createDecorator<ILeapfrogIndexService>('leapfrogIndexService');
+
+// ---------------------------------------------------------------------------
+// Index Preferences Service - manages file indexing preferences and scanning
+// ---------------------------------------------------------------------------
+
+/**
+ * Information about a file that could be indexed.
+ */
+export interface IIndexableFile {
+	path: string;
+	fileName: string;
+	size: number;
+	mtime: number;
+	isIndexed: boolean;
+	shouldIndex: boolean;
+	reason?: string;  // Why it is/isn't indexed
+}
+
+/**
+ * Index preferences and statistics.
+ */
+export interface ILeapfrogIndexPreferences {
+	includePatterns: string[];
+	excludePatterns: string[];
+	autoIndex: boolean;
+	totalFiles: number;
+	indexedFiles: number;
+	shouldIndexFiles: number;
+}
+
+/**
+ * Service that manages indexing preferences and scans for indexable files.
+ */
+export interface ILeapfrogIndexPreferencesService {
+	readonly _serviceBrand: undefined;
+
+	// Lifecycle
+	initialize(projectPath: string): Promise<void>;
+	close(): Promise<void>;
+
+	// Events
+	readonly onDidChangePreferences: Event<void>;
+
+	// Preferences
+	getPreferences(): Promise<ILeapfrogIndexPreferences>;
+	updatePreferences(data: { includePatterns?: string[]; excludePatterns?: string[]; autoIndex?: boolean }): Promise<void>;
+
+	// File scanning
+	scanWorkspace(): Promise<IIndexableFile[]>;
+	getIndexableFiles(): Promise<IIndexableFile[]>;
+	getIndexedFiles(): Promise<IIndexableFile[]>;
+	getShouldIndexFiles(): Promise<IIndexableFile[]>;
+
+	// Statistics
+	getStats(): Promise<{ total: number; indexed: number; shouldIndex: number }>;
+}
+
+export const ILeapfrogIndexPreferencesService = createDecorator<ILeapfrogIndexPreferencesService>('leapfrogIndexPreferencesService');
