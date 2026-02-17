@@ -19,7 +19,7 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService } from '../common/leapfrog.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
@@ -32,6 +32,7 @@ import { LeapfrogAIService } from './leapfrogAIService.js';
 import { LeapfrogChatService } from './leapfrogChatService.js';
 import { IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { LeapfrogIndexService } from './leapfrogIndexService.js';
+import { LeapfrogIndexPreferencesService } from './leapfrogIndexPreferencesService.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -81,6 +82,7 @@ registerSingleton(ILeapfrogChatHistoryService, LeapfrogChatHistoryService, Insta
 registerSingleton(ILeapfrogAIService, LeapfrogAIService, InstantiationType.Delayed);
 registerSingleton(IChatService, LeapfrogChatService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogIndexService, LeapfrogIndexService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogIndexPreferencesService, LeapfrogIndexPreferencesService, InstantiationType.Delayed);
 
 // ---------------------------------------------------------------------------
 // Transcription Commands
