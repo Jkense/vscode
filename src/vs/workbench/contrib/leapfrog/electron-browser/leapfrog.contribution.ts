@@ -19,7 +19,7 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService } from '../common/leapfrog.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
@@ -31,6 +31,7 @@ import { LeapfrogChatHistoryService } from './leapfrogChatHistoryService.js';
 import { LeapfrogAIService } from './leapfrogAIService.js';
 import { LeapfrogChatService } from './leapfrogChatService.js';
 import { IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { LeapfrogIndexService } from './leapfrogIndexService.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -79,6 +80,7 @@ registerSingleton(ILeapfrogTranscriptionService, LeapfrogTranscriptionService, I
 registerSingleton(ILeapfrogChatHistoryService, LeapfrogChatHistoryService, InstantiationType.Delayed);
 registerSingleton(ILeapfrogAIService, LeapfrogAIService, InstantiationType.Delayed);
 registerSingleton(IChatService, LeapfrogChatService, InstantiationType.Delayed);
+registerSingleton(ILeapfrogIndexService, LeapfrogIndexService, InstantiationType.Delayed);
 
 // ---------------------------------------------------------------------------
 // Transcription Commands
@@ -101,6 +103,11 @@ CommandsRegistry.registerCommand('leapfrog.renameSpeaker', async (accessor: Serv
 	await transcriptionService.renameSpeaker(transcriptId, speakerId, newName);
 });
 
+CommandsRegistry.registerCommand('leapfrog.indexWorkspace', async (accessor: ServicesAccessor) => {
+	const indexService = accessor.get(ILeapfrogIndexService);
+	await indexService.indexWorkspace();
+});
+
 /**
  * Contribution that initializes Leapfrog desktop services
  */
@@ -108,22 +115,49 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 
 	static readonly ID = 'workbench.contrib.leapfrogDesktop';
 
+	private indexDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
 		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
+		@ILeapfrogIndexService private readonly indexService: ILeapfrogIndexService,
 		@IWorkingCopyFileService private readonly workingCopyFileService: IWorkingCopyFileService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Desktop contribution initialized');
 		this.initializeTagDatabase();
 		this.initializeChatDatabase();
+		this.initializeIndexService();
 
 		// Duplicate tag applications when files are copied
 		this._register(this.workingCopyFileService.onDidRunWorkingCopyFileOperation(e => {
 			if (e.operation === FileOperation.COPY) {
 				this.handleFileCopy(e.files);
+			}
+			// Re-index on file create/save
+			if (e.operation === FileOperation.CREATE || e.operation === FileOperation.COPY) {
+				for (const { target } of e.files) {
+					this.scheduleFileReindex(target.fsPath);
+				}
+			}
+			// Remove from index on file delete
+			if (e.operation === FileOperation.DELETE) {
+				for (const { target } of e.files) {
+					this.indexService.removeFile(target.fsPath).catch(err =>
+						this.logService.error('[Leapfrog] Failed to remove file from index', err)
+					);
+				}
+			}
+			// Handle file move/rename
+			if (e.operation === FileOperation.MOVE) {
+				for (const { source, target } of e.files) {
+					if (source) {
+						this.indexService.removeFile(source.fsPath).catch(() => { });
+					}
+					this.scheduleFileReindex(target.fsPath);
+				}
 			}
 		}));
 	}
@@ -154,6 +188,31 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		}
 	}
 
+	private async initializeIndexService(): Promise<void> {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		if (folders.length > 0) {
+			const projectPath = folders[0].uri.fsPath;
+			try {
+				await this.indexService.initialize(projectPath);
+				this.logService.info('[Leapfrog] Index service initialized for workspace:', projectPath);
+			} catch (err) {
+				this.logService.error('[Leapfrog] Failed to initialize index service', err);
+			}
+		}
+	}
+
+	private scheduleFileReindex(filePath: string): void {
+		// Debounce re-indexing for 2 seconds
+		if (this.indexDebounceTimer) {
+			clearTimeout(this.indexDebounceTimer);
+		}
+		this.indexDebounceTimer = setTimeout(() => {
+			this.indexService.indexFile(filePath).catch(err =>
+				this.logService.error('[Leapfrog] Failed to re-index file', err)
+			);
+		}, 2000);
+	}
+
 	private async handleFileCopy(files: readonly { source?: URI; target: URI }[]): Promise<void> {
 		for (const { source, target } of files) {
 			if (!source) {
@@ -180,11 +239,17 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 	}
 
 	override dispose(): void {
+		if (this.indexDebounceTimer) {
+			clearTimeout(this.indexDebounceTimer);
+		}
 		this.tagService.close().catch(err =>
 			this.logService.error('[Leapfrog] Error closing tag database', err)
 		);
 		this.chatHistoryService.close().catch(err =>
 			this.logService.error('[Leapfrog] Error closing chat history database', err)
+		);
+		this.indexService.close().catch(err =>
+			this.logService.error('[Leapfrog] Error closing index service', err)
 		);
 		super.dispose();
 	}

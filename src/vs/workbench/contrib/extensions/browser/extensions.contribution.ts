@@ -8,7 +8,8 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { IStringDictionary } from '../../../../base/common/collections.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Event } from '../../../../base/common/event.js';
-import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+// Leapfrog: Removed - not used since extensions view is disabled
+// import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { mnemonicButtonLabel } from '../../../../base/common/labels.js';
 import { Disposable, DisposableStore, IDisposable, isDisposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -50,7 +51,8 @@ import { Extensions as ConfigurationMigrationExtensions, IConfigurationMigration
 import { ResourceContextKey, WorkbenchStateContext } from '../../../common/contextkeys.js';
 import { IWorkbenchContribution, IWorkbenchContributionsRegistry, registerWorkbenchContribution2, Extensions as WorkbenchExtensions, WorkbenchPhase } from '../../../common/contributions.js';
 import { EditorExtensions } from '../../../common/editor.js';
-import { IViewContainersRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
+// Leapfrog: Removed - not used since extensions view is disabled
+// import { IViewContainersRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
 import { DEFAULT_ACCOUNT_SIGN_IN_COMMAND } from '../../../services/accounts/browser/defaultAccount.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { EnablementState, IExtensionManagementServerService, IPublisherInfo, IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
@@ -80,9 +82,9 @@ import { ClearLanguageAction, ConfigureWorkspaceFolderRecommendedExtensionsActio
 import { ExtensionActivationProgress } from './extensionsActivationProgress.js';
 import { ExtensionsCompletionItemsProvider } from './extensionsCompletionItemsProvider.js';
 import { ExtensionDependencyChecker } from './extensionsDependencyChecker.js';
-import { clearSearchResultsIcon, configureRecommendedIcon, extensionsViewIcon, filterIcon, installWorkspaceRecommendedIcon, refreshIcon } from './extensionsIcons.js';
+import { clearSearchResultsIcon, configureRecommendedIcon, filterIcon, installWorkspaceRecommendedIcon, refreshIcon } from './extensionsIcons.js';
 import { InstallExtensionQuickAccessProvider, ManageExtensionsQuickAccessProvider } from './extensionsQuickAccess.js';
-import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, ExtensionsSearchValueContext, ExtensionsSortByContext, ExtensionsViewletViewsContribution, ExtensionsViewPaneContainer, MaliciousExtensionChecker, RecommendedExtensionsContext, SearchHasTextContext, SearchMarketplaceExtensionsContext, StatusUpdater } from './extensionsViewlet.js';
+import { BuiltInExtensionsContext, ExtensionMarketplaceStatusUpdater, ExtensionsSearchValueContext, ExtensionsSortByContext, MaliciousExtensionChecker, RecommendedExtensionsContext, SearchHasTextContext, SearchMarketplaceExtensionsContext, StatusUpdater } from './extensionsViewlet.js';
 import { ExtensionsWorkbenchService } from './extensionsWorkbenchService.js';
 import './media/extensionManagement.css';
 import { UnsupportedExtensionsMigrationContrib } from './unsupportedExtensionsMigrationContribution.js';

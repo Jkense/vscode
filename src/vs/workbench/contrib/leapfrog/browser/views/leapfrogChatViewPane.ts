@@ -108,8 +108,8 @@ export class LeapfrogChatViewPane extends ViewPane {
 		// Input area
 		this.renderInputArea(this.chatContainer);
 
-		// Load and display existing messages
-		this.initializeSessions();
+		// Delay initialization to allow service to initialize
+		this.initializeSessionsWithRetry();
 	}
 
 	private renderInputArea(container: HTMLElement): void {
@@ -141,9 +141,11 @@ export class LeapfrogChatViewPane extends ViewPane {
 
 	private async loadMessages(): Promise<void> {
 		try {
-			// Clear existing messages when switching sessions
+			// Clear existing messages when switching sessions (safe DOM clearing for TrustedHTML policy)
 			if (this.messagesList) {
-				this.messagesList.innerHTML = '';
+				while (this.messagesList.firstChild) {
+					this.messagesList.removeChild(this.messagesList.firstChild);
+				}
 			}
 
 			// Load messages for current session
@@ -255,7 +257,9 @@ export class LeapfrogChatViewPane extends ViewPane {
 
 	private clearChat(): void {
 		if (this.messagesList) {
-			this.messagesList.innerHTML = '';
+			while (this.messagesList.firstChild) {
+				this.messagesList.removeChild(this.messagesList.firstChild);
+			}
 		}
 		if (this.inputEditor) {
 			this.inputEditor.value = '';
@@ -277,7 +281,7 @@ export class LeapfrogChatViewPane extends ViewPane {
 		}));
 	}
 
-	private async initializeSessions(): Promise<void> {
+	private async initializeSessionsWithRetry(attempt: number = 0, maxAttempts: number = 10): Promise<void> {
 		try {
 			const sessions = await this.chatHistoryService.getSessions();
 
@@ -296,7 +300,13 @@ export class LeapfrogChatViewPane extends ViewPane {
 			await this.refreshTabBar();
 			await this.loadMessages();
 		} catch (error) {
-			this.logService.error('[Leapfrog Chat] Failed to initialize sessions:', error);
+			if (attempt < maxAttempts) {
+				const delay = Math.min(100 * Math.pow(2, attempt), 2000);
+				this.logService.trace(`[Leapfrog Chat] Waiting for database (attempt ${attempt + 1}/${maxAttempts})...`);
+				setTimeout(() => this.initializeSessionsWithRetry(attempt + 1, maxAttempts), delay);
+			} else {
+				this.logService.error('[Leapfrog Chat] Failed to initialize sessions after max attempts:', error);
+			}
 		}
 	}
 

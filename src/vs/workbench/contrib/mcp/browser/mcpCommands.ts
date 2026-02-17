@@ -55,7 +55,7 @@ import { IChatElicitationRequest, IChatToolInvocation } from '../../chat/common/
 import { ChatAgentLocation, ChatModeKind } from '../../chat/common/constants.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
-import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
+// import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
 import { extensionsFilterSubMenu, IExtensionsWorkbenchService } from '../../extensions/common/extensions.js';
 import { TEXT_FILE_EDITOR_ID } from '../../files/common/files.js';
 import { McpCommandIds } from '../common/mcpCommandIds.js';
@@ -923,10 +923,11 @@ export class ShowInstalledMcpServersCommand extends Action2 {
 	async run(accessor: ServicesAccessor) {
 		const viewsService = accessor.get(IViewsService);
 		const view = await viewsService.openView(InstalledMcpServersViewId, true);
-		if (!view) {
-			await viewsService.openViewContainer(VIEW_CONTAINER.id);
-			await viewsService.openView(InstalledMcpServersViewId, true);
-		}
+		// Leapfrog: MCP servers view has been disabled
+		// if (!view) {
+		// 	await viewsService.openViewContainer(VIEW_CONTAINER.id);
+		// 	await viewsService.openView(InstalledMcpServersViewId, true);
+		// }
 	}
 }
 

@@ -26,6 +26,7 @@ import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import {
 	ILeapfrogAIService,
 	ILeapfrogChatConfig,
+	ILeapfrogIndexService,
 	LEAPFROG_AVAILABLE_MODELS,
 } from '../common/leapfrog.js';
 import { LeapfrogConfigurationKeys } from '../common/leapfrogConfiguration.js';
@@ -119,6 +120,7 @@ export class LeapfrogChatAgent extends Disposable implements IChatAgentImplement
 
 	constructor(
 		@ILeapfrogAIService private readonly aiService: ILeapfrogAIService,
+		@ILeapfrogIndexService private readonly indexService: ILeapfrogIndexService,
 		@IConfigurationService private readonly configService: IConfigurationService,
 		@ILogService private readonly logService: ILogService,
 	) {
@@ -168,7 +170,13 @@ export class LeapfrogChatAgent extends Disposable implements IChatAgentImplement
 				return { metadata: { errorType: 'validation' } };
 			}
 
-			const processedMessage = this.processSlashCommand(request.command, userMessage);
+			let processedMessage = this.processSlashCommand(request.command, userMessage);
+
+			// Enrich /search and /cross-reference commands with index results
+			if (request.command === 'search' || request.command === 'cross-reference') {
+				const searchQuery = userMessage.replace(/^\/\w+\s*/, '').trim() || userMessage;
+				processedMessage = await this.enrichWithSearchResults(searchQuery, processedMessage);
+			}
 
 			// Convert request and history to Leapfrog message format
 			let messages;
@@ -372,7 +380,9 @@ export class LeapfrogChatAgent extends Disposable implements IChatAgentImplement
 	}
 
 	private extractResponseText(response: IChatAgentHistoryEntry['response']): string {
-		if (!response) return '';
+		if (!response) {
+			return '';
+		}
 
 		// Extract markdown content from response parts
 		let text = '';
@@ -380,8 +390,9 @@ export class LeapfrogChatAgent extends Disposable implements IChatAgentImplement
 		if (Array.isArray(response)) {
 			for (const part of response) {
 				if (part && typeof part === 'object') {
-					if ('content' in part && part.content) {
-						text += part.content.toString() + '\n';
+					const obj = part as Record<string, unknown>;
+					if (obj.content) {
+						text += obj.content.toString() + '\n';
 					}
 				}
 			}
@@ -393,6 +404,40 @@ export class LeapfrogChatAgent extends Disposable implements IChatAgentImplement
 	// -----------------------------------------------------------------------
 	// Configuration & Context
 	// -----------------------------------------------------------------------
+
+	/**
+	 * Enrich a prompt with semantic search results from the index.
+	 */
+	private async enrichWithSearchResults(query: string, originalPrompt: string): Promise<string> {
+		if (!this.indexService.isReady()) {
+			return originalPrompt;
+		}
+
+		try {
+			const results = await this.indexService.search(query, { limit: 5, minScore: 0.3 });
+			if (results.length === 0) {
+				return originalPrompt;
+			}
+
+			let context = 'Here are relevant excerpts from the research project:\n\n';
+			for (const r of results) {
+				const source = r.chunk.filePath.split(/[/\\]/).pop() ?? r.chunk.filePath;
+				context += `--- ${source} (relevance: ${(r.score * 100).toFixed(0)}%) ---\n`;
+				if (r.chunk.headingPath) {
+					context += `Section: ${r.chunk.headingPath}\n`;
+				}
+				if (r.chunk.speaker) {
+					context += `Speaker: ${r.chunk.speaker}\n`;
+				}
+				context += r.chunk.content.trim() + '\n\n';
+			}
+
+			return context + '\n' + originalPrompt;
+		} catch (err) {
+			this.logService.warn('[Leapfrog] Search enrichment failed:', err);
+			return originalPrompt;
+		}
+	}
 
 	private getSystemPrompt(): string {
 		return `You are Leapfrog, an AI assistant specialized in helping with qualitative research analysis.

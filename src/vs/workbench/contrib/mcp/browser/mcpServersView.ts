@@ -38,7 +38,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { DefaultViewsContext, SearchMcpServersContext } from '../../extensions/common/extensions.js';
-import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
+// import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
 import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';

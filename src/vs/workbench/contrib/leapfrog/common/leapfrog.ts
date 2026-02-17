@@ -479,3 +479,92 @@ export interface ILeapfrogChatHistoryService {
 }
 
 export const ILeapfrogChatHistoryService = createDecorator<ILeapfrogChatHistoryService>('leapfrogChatHistoryService');
+
+// ---------------------------------------------------------------------------
+// Index Service - semantic search over project files
+// ---------------------------------------------------------------------------
+
+/**
+ * Status of the indexing process.
+ */
+export type LeapfrogIndexStatus = 'idle' | 'scanning' | 'chunking' | 'embedding' | 'ready' | 'error';
+
+/**
+ * Progress information for indexing operations.
+ */
+export interface ILeapfrogIndexProgress {
+	status: LeapfrogIndexStatus;
+	totalFiles: number;
+	processedFiles: number;
+	totalChunks: number;
+	embeddedChunks: number;
+	currentFile?: string;
+	error?: string;
+}
+
+/**
+ * A single chunk of indexed content.
+ */
+export interface ILeapfrogIndexChunk {
+	id: string;
+	filePath: string;
+	chunkType: 'markdown_heading' | 'transcript_speaker_turn' | 'plaintext_paragraph';
+	content: string;
+	startOffset: number;
+	endOffset: number;
+	/** For markdown: heading path e.g. "Methods > Sampling" */
+	headingPath?: string;
+	/** For transcripts: speaker name */
+	speaker?: string;
+	/** For transcripts: start time in ms */
+	startTime?: number;
+	/** For transcripts: end time in ms */
+	endTime?: number;
+}
+
+/**
+ * A search result with relevance score.
+ */
+export interface ILeapfrogSearchResult {
+	chunk: ILeapfrogIndexChunk;
+	score: number;
+}
+
+/**
+ * Options for semantic search queries.
+ */
+export interface ILeapfrogSearchOptions {
+	limit?: number;
+	fileTypes?: string[];
+	minScore?: number;
+}
+
+/**
+ * Service that manages document indexing and semantic search.
+ *
+ * Chunks workspace files, generates embeddings via OpenAI, and provides
+ * cosine-similarity search. All data stored locally in `.leapfrog/index.json`.
+ */
+export interface ILeapfrogIndexService {
+	readonly _serviceBrand: undefined;
+
+	// Lifecycle
+	initialize(projectPath: string): Promise<void>;
+	close(): Promise<void>;
+
+	// Events
+	readonly onDidChangeIndexProgress: Event<ILeapfrogIndexProgress>;
+	readonly onDidIndexComplete: Event<void>;
+
+	// Indexing
+	indexWorkspace(): Promise<void>;
+	indexFile(filePath: string): Promise<void>;
+	removeFile(filePath: string): Promise<void>;
+	getProgress(): ILeapfrogIndexProgress;
+	isReady(): boolean;
+
+	// Search
+	search(query: string, options?: ILeapfrogSearchOptions): Promise<ILeapfrogSearchResult[]>;
+}
+
+export const ILeapfrogIndexService = createDecorator<ILeapfrogIndexService>('leapfrogIndexService');
