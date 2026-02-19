@@ -534,6 +534,15 @@ export interface ILeapfrogIndexChunk {
 }
 
 /**
+ * Payload sent from desktop to web API for chunk syncing.
+ */
+export interface ChunkSyncPayload {
+	filePath: string;
+	chunks: ILeapfrogIndexChunk[];
+	fileHash?: string;
+}
+
+/**
  * A search result with relevance score.
  */
 export interface ILeapfrogSearchResult {
@@ -576,6 +585,9 @@ export interface ILeapfrogIndexService {
 
 	// Search
 	search(query: string, options?: ILeapfrogSearchOptions): Promise<ILeapfrogSearchResult[]>;
+
+	// Backend sync (Merkle tree + Pinecone)
+	syncToBackend(projectId: string): Promise<{ changedCount: number } | null>;
 }
 
 export const ILeapfrogIndexService = createDecorator<ILeapfrogIndexService>('leapfrogIndexService');

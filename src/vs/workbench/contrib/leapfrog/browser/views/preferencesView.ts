@@ -15,7 +15,7 @@ import { IViewDescriptorService } from '../../../../common/views.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { $, append, clearNode } from '../../../../../base/browser/dom.js';
-import { ILeapfrogIndexPreferencesService, IIndexableFile } from '../../common/leapfrog.js';
+import { ILeapfrogIndexPreferencesService, ILeapfrogIndexService, IIndexableFile } from '../../common/leapfrog.js';
 
 // ---------------------------------------------------------------------------
 // Preferences View
@@ -26,6 +26,7 @@ export class LeapfrogPreferencesView extends ViewPane {
 	private container: HTMLElement | undefined;
 	private indexableFiles: IIndexableFile[] = [];
 	private preferencesService: ILeapfrogIndexPreferencesService | undefined;
+	private indexService: ILeapfrogIndexService | undefined;
 
 	constructor(
 		options: IViewPaneOptions,
@@ -44,18 +45,23 @@ export class LeapfrogPreferencesView extends ViewPane {
 	}
 
 	private async initialize(): Promise<void> {
-		// Try to get the preferences service (will be undefined in browser context)
 		try {
 			this.preferencesService = this.instantiationService.invokeFunction(
 				(accessor) => accessor.get(ILeapfrogIndexPreferencesService)
 			);
+			this.indexService = this.instantiationService.invokeFunction(
+				(accessor) => accessor.get(ILeapfrogIndexService)
+			);
 		} catch {
-			// Service not available in this context
+			// Services not available in this context
 		}
 
 		if (this.preferencesService) {
 			this._register(this.preferencesService.onDidChangePreferences(() => this.refresh()));
 			await this.refresh();
+		}
+		if (this.indexService) {
+			this._register(this.indexService.onDidChangeIndexProgress(() => this.refresh()));
 		}
 	}
 
@@ -80,7 +86,7 @@ export class LeapfrogPreferencesView extends ViewPane {
 		}
 	}
 
-	protected override render(): void {
+	override render(): void {
 		if (!this.container) {
 			return;
 		}
@@ -100,6 +106,18 @@ export class LeapfrogPreferencesView extends ViewPane {
 		append(statsDiv, $('div', {}, `${nls.localize('leapfrogPreferencesTotal', 'Total files')}: ${stats.total}`));
 		append(statsDiv, $('div', {}, `${nls.localize('leapfrogPreferencesIndexed', 'Indexed')}: ${stats.indexed}`));
 		append(statsDiv, $('div', {}, `${nls.localize('leapfrogPreferencesShouldIndex', 'Should index')}: ${stats.shouldIndex}`));
+
+		if (stats.progress && stats.progress.status !== 'idle' && stats.progress.status !== 'ready') {
+			const progressDiv = append(header, $('div.preferences-progress'));
+			append(progressDiv, $('div', {}, `${nls.localize('leapfrogIndexingStatus', 'Status')}: ${stats.progress.status}`));
+			if (stats.progress.totalFiles > 0) {
+				const pct = Math.round((stats.progress.processedFiles / stats.progress.totalFiles) * 100);
+				append(progressDiv, $('div', {}, `${stats.progress.processedFiles}/${stats.progress.totalFiles} files (${pct}%)`));
+			}
+			if (stats.progress.currentFile) {
+				append(progressDiv, $('div.preferences-current-file', {}, stats.progress.currentFile));
+			}
+		}
 
 		// Create sections
 		const sections = append(content, $('div.preferences-sections'));
@@ -161,12 +179,17 @@ export class LeapfrogPreferencesView extends ViewPane {
 		}
 	}
 
-	private getStats(): { total: number; indexed: number; shouldIndex: number } {
-		return {
+	private getStats(): { total: number; indexed: number; shouldIndex: number; progress?: { status: string; processedFiles: number; totalFiles: number; totalChunks: number; embeddedChunks: number; currentFile?: string } } {
+		const base = {
 			total: this.indexableFiles.length,
 			indexed: this.indexableFiles.filter(f => f.isIndexed).length,
 			shouldIndex: this.indexableFiles.filter(f => f.shouldIndex && !f.isIndexed).length,
 		};
+		if (this.indexService) {
+			const p = this.indexService.getProgress();
+			return { ...base, progress: p };
+		}
+		return base;
 	}
 
 	override focus(): void {

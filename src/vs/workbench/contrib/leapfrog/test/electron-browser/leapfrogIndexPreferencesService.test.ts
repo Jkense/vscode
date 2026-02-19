@@ -89,6 +89,7 @@ suite('Leapfrog Index Preferences Service', () => {
 			assert.strictEqual(isMatch('file.Txt', '*.txt'), true, 'Should match case-insensitive .Txt');
 		});
 
+		test('should match docs folder patterns', () => {
 			const isMatch = (path: string): boolean => {
 				return /^docs\/.*\.md$/i.test(path.replace(/\\/g, '/'));
 			};

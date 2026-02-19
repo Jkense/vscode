@@ -33,6 +33,8 @@ import {
 import { LeapfrogIndexJsonDatabase, type IIndexedChunkRow } from './leapfrogIndexJsonDatabase.js';
 import { LeapfrogEmbeddingService, type IEmbeddingRequest } from './leapfrogEmbeddingService.js';
 import { chunkFile } from './leapfrogChunker.js';
+import { LeapfrogMerkleTree, type MerkleTree, type MerkleFileInfo } from './leapfrogMerkleTree.js';
+import { LeapfrogSyncService } from './leapfrogSyncService.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -63,6 +65,7 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 
 	private readonly db: LeapfrogIndexJsonDatabase;
 	private readonly embeddingService: LeapfrogEmbeddingService;
+	private readonly merkleTree: LeapfrogMerkleTree;
 
 	private projectPath: string | undefined;
 	private initialized = false;
@@ -84,6 +87,7 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 		super();
 		this.db = this._register(new LeapfrogIndexJsonDatabase(fileService));
 		this.embeddingService = new LeapfrogEmbeddingService(apiKeyService, logService);
+		this.merkleTree = new LeapfrogMerkleTree(fileService);
 	}
 
 	// -----------------------------------------------------------------------
@@ -219,14 +223,14 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 
 				const batch = toIndex.slice(i, i + CHUNK_BATCH_SIZE);
 				for (const file of batch) {
-					// Remove old chunks for this file first
-					this.db.removeChunksForFile(file.path);
+					// BEFORE chunking - compute hash from original content (atomic with chunks)
+					const hash = await this.hashContent(file.content);
 
-					// Generate new chunks
+					// THEN chunk the same content
 					const chunks = chunkFile(file.path, file.content);
 					allNewChunks.push(...chunks);
 
-					// Convert to DB rows and insert
+					// Convert to DB rows
 					const rows: IIndexedChunkRow[] = chunks.map(c => ({
 						id: c.id,
 						file_path: c.filePath,
@@ -240,11 +244,9 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 						end_time: c.endTime ?? null,
 						created_at: new Date().toISOString(),
 					}));
-					this.db.insertChunks(rows);
 
-					// Update file hash
-					const hash = await this.hashContent(file.content);
-					this.db.setFileHash(file.path, hash, chunks.length);
+					// ATOMIC storage - hash and chunks together
+					this.db.setFileHashAndChunks(file.path, hash, rows);
 				}
 
 				this.updateProgress({
@@ -294,6 +296,9 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 			});
 			this._onDidIndexComplete.fire();
 
+			// Build and store Merkle tree for change detection
+			await this.updateMerkleTree(files);
+
 			this.logService.info(`[Leapfrog] Indexing complete: ${this.db.getChunkCount()} chunks, ${this.db.getEmbeddingCount()} embeddings`);
 
 		} catch (err) {
@@ -319,10 +324,10 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 			const fileContent = await this.fileService.readFile(uri);
 			const content = fileContent.value.toString();
 
-			// Remove old chunks
-			this.db.removeChunksForFile(filePath);
+			// BEFORE chunking - compute hash from original content
+			const hash = await this.hashContent(content);
 
-			// Re-chunk
+			// THEN chunk the same content
 			const chunks = chunkFile(filePath, content);
 			const rows: IIndexedChunkRow[] = chunks.map(c => ({
 				id: c.id,
@@ -337,11 +342,9 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 				end_time: c.endTime ?? null,
 				created_at: new Date().toISOString(),
 			}));
-			this.db.insertChunks(rows);
 
-			// Update hash
-			const hash = await this.hashContent(content);
-			this.db.setFileHash(filePath, hash, chunks.length);
+			// ATOMIC storage - hash and chunks together
+			this.db.setFileHashAndChunks(filePath, hash, rows);
 
 			// Re-embed the new chunks
 			const requests: IEmbeddingRequest[] = chunks.map(c => ({ id: c.id, text: c.content }));
@@ -555,6 +558,92 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 
 	private yieldTick(): Promise<void> {
 		return new Promise(resolve => setTimeout(resolve, 0));
+	}
+
+	// -----------------------------------------------------------------------
+	// Merkle Tree (for sync/change detection)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Build and store Merkle tree from scanned files.
+	 */
+	private async updateMerkleTree(files: { path: string; content: string }[]): Promise<void> {
+		if (!this.projectPath || files.length === 0) {
+			return;
+		}
+		try {
+			const merkleFiles: MerkleFileInfo[] = files.map(f => ({ path: f.path, content: f.content }));
+			const tree = await this.merkleTree.buildMerkleTree(merkleFiles);
+			await this.merkleTree.saveMerkleTree(this.projectPath, tree);
+			this.logService.info(`[Leapfrog] Merkle tree updated: root=${tree.rootHash.slice(0, 16)}...`);
+		} catch (err) {
+			this.logService.warn('[Leapfrog] Failed to update Merkle tree:', err);
+		}
+	}
+
+	/**
+	 * Get the Merkle tree service for sync operations.
+	 */
+	getMerkleTreeService(): LeapfrogMerkleTree {
+		return this.merkleTree;
+	}
+
+	/**
+	 * Load stored Merkle tree for the current project.
+	 */
+	async loadMerkleTree(): Promise<MerkleTree | null> {
+		if (!this.projectPath) {
+			return null;
+		}
+		return this.merkleTree.loadMerkleTree(this.projectPath);
+	}
+
+	/**
+	 * Build Merkle tree with relative paths for sync comparison.
+	 */
+	async getMerkleTreeForSync(): Promise<MerkleTree | null> {
+		if (!this.projectPath) {
+			return null;
+		}
+		const fileHashes = this.db.getAllFileHashes();
+		const hashes: Record<string, string> = {};
+		for (const [path, row] of Object.entries(fileHashes)) {
+			hashes[path] = row.hash;
+		}
+		if (Object.keys(hashes).length === 0) {
+			return null;
+		}
+		return this.merkleTree.buildMerkleTreeFromHashes(this.projectPath, hashes);
+	}
+
+	/**
+	 * Sync indexed chunks to backend using Merkle tree comparison.
+	 * Returns changed count or null if no sync needed.
+	 */
+	async syncToBackend(projectId: string): Promise<{ changedCount: number } | null> {
+		if (!this.initialized || !this.projectPath) {
+			return null;
+		}
+
+		const syncService = new LeapfrogSyncService(this.fileService, this.logService);
+		const fileHashes = this.db.getAllFileHashes();
+		const hashes: Record<string, string> = {};
+		for (const [path, row] of Object.entries(fileHashes)) {
+			hashes[path] = row.hash;
+		}
+
+		const merkleTree = await this.merkleTree.buildMerkleTreeFromHashes(this.projectPath, hashes);
+		const remote = await syncService.fetchRemoteMerkleTree(projectId);
+		const changed = this.merkleTree.compareTrees(merkleTree, remote);
+
+		if (changed.length === 0) {
+			return null;
+		}
+
+		const payloads = syncService.buildChunkPayloads(this.projectPath, this.db, changed);
+		await syncService.syncChangedChunks(projectId, merkleTree, payloads);
+		this.logService.info(`[Leapfrog] Synced ${changed.length} changed files to backend`);
+		return { changedCount: changed.length };
 	}
 }
 

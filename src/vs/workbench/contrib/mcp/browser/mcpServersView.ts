@@ -25,7 +25,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getLocationBasedViewColors } from '../../../browser/parts/views/viewPane.js';
 import { IViewletViewOptions } from '../../../browser/parts/views/viewsViewlet.js';
-import { IViewDescriptorService, IViewsRegistry, ViewContainerLocation, Extensions as ViewExtensions } from '../../../common/views.js';
+import { IViewDescriptorService, IViewsRegistry, IViewContainersRegistry, ViewContainerLocation, Extensions as ViewExtensions } from '../../../common/views.js';
 import { HasInstalledMcpServersContext, IMcpWorkbenchService, InstalledMcpServersViewId, IWorkbenchMcpServer, McpServerContainers, McpServerEnablementState, McpServersGalleryStatusContext } from '../common/mcpTypes.js';
 import { DropDownAction, getContextMenuActions, InstallAction, InstallingLabelAction, ManageMcpServerAction, McpServerStatusAction } from './mcpServerActions.js';
 import { PublisherWidget, StarredWidget, McpServerIconWidget, McpServerHoverWidget, McpServerScopeBadgeWidget } from './mcpServerWidgets.js';
@@ -38,7 +38,16 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { DefaultViewsContext, SearchMcpServersContext } from '../../extensions/common/extensions.js';
-// import { VIEW_CONTAINER } from '../../extensions/browser/extensions.contribution.js';
+import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContainer.js';
+
+// MCP view container (extensions view disabled in Leapfrog - use standalone MCP container)
+const MCP_VIEWLET_ID = 'workbench.view.mcp';
+const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewContainersRegistry).registerViewContainer({
+	id: MCP_VIEWLET_ID,
+	title: localize2('mcp', "MCP Servers"),
+	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [MCP_VIEWLET_ID, { mergeViewWithContainerWhenSingleView: true }]),
+	hideIfEmpty: true,
+}, ViewContainerLocation.Sidebar);
 import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';

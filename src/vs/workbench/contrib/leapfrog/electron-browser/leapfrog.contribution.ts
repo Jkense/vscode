@@ -19,12 +19,17 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { localize } from '../../../../nls.js';
+import { Severity } from '../../../../platform/notification/common/notification.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 import { LeapfrogChatHistoryService } from './leapfrogChatHistoryService.js';
@@ -33,6 +38,8 @@ import { LeapfrogChatService } from './leapfrogChatService.js';
 import { IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { LeapfrogIndexService } from './leapfrogIndexService.js';
 import { LeapfrogIndexPreferencesService } from './leapfrogIndexPreferencesService.js';
+import { LeapfrogSyncService } from './leapfrogSyncService.js';
+import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -57,6 +64,13 @@ class LeapfrogApiKeyService extends Disposable implements ILeapfrogApiKeyService
 	}
 
 	async getApiKey(provider: 'openai' | 'anthropic'): Promise<string | undefined> {
+		// Env var fallback for development (OPENAI_API_KEY, ANTHROPIC_API_KEY)
+		const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+		const env = typeof process !== 'undefined' ? process.env : undefined;
+		const envValue = env?.[envKey]?.trim();
+		if (envValue) {
+			return envValue;
+		}
 		const storageKey = LeapfrogApiKeyService.KEY_PREFIX + provider;
 		return this.secretStorageService.get(storageKey);
 	}
@@ -110,6 +124,48 @@ CommandsRegistry.registerCommand('leapfrog.indexWorkspace', async (accessor: Ser
 	await indexService.indexWorkspace();
 });
 
+CommandsRegistry.registerCommand({
+	id: 'leapfrog.configureApiKey',
+	metadata: {
+		description: localize('leapfrogConfigureApiKey', 'Leapfrog: Configure API Key')
+	},
+	handler: async (accessor: ServicesAccessor) => {
+		const apiKeyService = accessor.get(ILeapfrogApiKeyService);
+		const quickInputService = accessor.get(IQuickInputService);
+		const notificationService = accessor.get(INotificationService);
+
+		const provider = await quickInputService.pick(
+			[
+				{ label: 'OpenAI', value: 'openai' as const },
+				{ label: 'Anthropic', value: 'anthropic' as const },
+			],
+			{ placeHolder: localize('leapfrogSelectProvider', 'Select AI provider') }
+		);
+
+		if (!provider?.value) {
+			return;
+		}
+
+		const key = await quickInputService.input({
+			placeHolder: localize('leapfrogApiKeyPlaceholder', 'Paste your API key'),
+			prompt: provider.value === 'openai'
+				? localize('leapfrogOpenAiKeyPrompt', 'Enter your OpenAI API key (starts with sk-)')
+				: localize('leapfrogAnthropicKeyPrompt', 'Enter your Anthropic API key (starts with sk-ant-)'),
+			validateInput: async (value) => {
+				if (!value?.trim()) {
+					return localize('leapfrogApiKeyRequired', 'API key is required');
+				}
+				return undefined;
+			},
+		});
+
+		if (key?.trim()) {
+			await apiKeyService.setApiKey(provider.value, key.trim());
+			notificationService.info(localize('leapfrogApiKeyStored', 'API key stored for {0}', provider.value === 'openai' ? 'OpenAI' : 'Anthropic'));
+		}
+	}
+});
+
 /**
  * Contribution that initializes Leapfrog desktop services
  */
@@ -122,6 +178,8 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@INotificationService private readonly notificationService: INotificationService,
+		@IFileService private readonly fileService: IFileService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
 		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
 		@ILeapfrogIndexService private readonly indexService: ILeapfrogIndexService,
@@ -132,6 +190,7 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		this.initializeTagDatabase();
 		this.initializeChatDatabase();
 		this.initializeIndexService();
+		this._register(this.indexService.onDidIndexComplete(() => this.checkAndShowIndexToast()));
 
 		// Duplicate tag applications when files are copied
 		this._register(this.workingCopyFileService.onDidRunWorkingCopyFileOperation(e => {
@@ -200,6 +259,54 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 			} catch (err) {
 				this.logService.error('[Leapfrog] Failed to initialize index service', err);
 			}
+		}
+	}
+
+	private async checkAndShowIndexToast(): Promise<void> {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		if (folders.length === 0) return;
+
+		const projectPath = folders[0].uri.fsPath;
+		const projectConfig = new LeapfrogProjectConfig(this.fileService);
+		const projectId = await projectConfig.getProjectId(projectPath);
+		if (!projectId) return;
+
+		try {
+			const syncService = new LeapfrogSyncService(this.fileService, this.logService);
+			const remote = await syncService.fetchRemoteMerkleTree(projectId);
+			const indexSvc = this.indexService as LeapfrogIndexService;
+			const localTree = await indexSvc.getMerkleTreeForSync();
+			if (!localTree) return;
+
+			const merkleTree = indexSvc.getMerkleTreeService();
+			const changed = merkleTree.compareTrees(localTree, remote);
+			if (changed.length === 0) return;
+
+			const msg = localize('leapfrogIndexToast', "Index {0} changed files?", String(changed.length));
+			this.notificationService.prompt(
+				Severity.Info,
+				msg,
+				[
+					{
+						label: localize('leapfrogIndexNow', 'Index Now'),
+						run: async () => {
+							try {
+								await this.indexService.indexWorkspace();
+								const result = await this.indexService.syncToBackend(projectId);
+								if (result) {
+									this.notificationService.info(localize('leapfrogSyncComplete', 'Synced {0} files to cloud index.', String(result.changedCount)));
+								}
+							} catch (err) {
+								const msg = LeapfrogSyncService.getSyncErrorMessage(err);
+								this.notificationService.error(localize('leapfrogSyncFailed', 'Failed to sync: {0}', msg));
+							}
+						},
+					},
+				],
+				{ sticky: false },
+			);
+		} catch (err) {
+			this.logService.warn('[Leapfrog] Index toast check failed:', err);
 		}
 	}
 

@@ -705,6 +705,9 @@ export class ViewPaneContainer<MementoType extends object = object> extends Comp
 			for (let i = 0; i < this.viewContainerModel.visibleViewDescriptors.length; i++) {
 				const pane = this.panes[i];
 				const viewDescriptor = this.viewContainerModel.visibleViewDescriptors[i];
+				if (!pane || !viewDescriptor) {
+					continue; // Guard against sync mismatch (e.g. stale storage from view menu changes)
+				}
 				const size = this.viewContainerModel.getSize(viewDescriptor.id);
 
 				if (typeof size === 'number') {
