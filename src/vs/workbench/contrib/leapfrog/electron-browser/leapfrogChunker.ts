@@ -119,7 +119,6 @@ function splitByHeadings(content: string): HeadingSection[] {
 	const pathStack: { level: number; title: string }[] = [];
 
 	let currentStart = 0;
-	// let currentOffset = 0;
 	let currentTitle = '';
 	let currentLevel = 0;
 	let accumulatedContent = '';
@@ -156,7 +155,6 @@ function splitByHeadings(content: string): HeadingSection[] {
 			currentLevel = level;
 			currentTitle = title;
 			currentStart = offset;
-			currentOffset = offset;
 			accumulatedContent = line + '\n';
 		} else {
 			accumulatedContent += line + '\n';

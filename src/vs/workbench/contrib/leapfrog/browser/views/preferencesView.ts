@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from '../../../../../nls.js';
-import { IViewletViewOptions } from '../../../../browser/parts/views/viewsViewlet.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -16,9 +15,7 @@ import { IViewDescriptorService } from '../../../../common/views.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { $, append, clearNode } from '../../../../../base/browser/dom.js';
-import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { LEAPFROG_PREFERENCES_VIEW_ID, ILeapfrogIndexPreferencesService, IIndexableFile } from '../../common/leapfrog.js';
+import { ILeapfrogIndexPreferencesService, IIndexableFile } from '../../common/leapfrog.js';
 
 // ---------------------------------------------------------------------------
 // Preferences View
@@ -37,11 +34,10 @@ export class LeapfrogPreferencesView extends ViewPane {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IInstantiationService protected override readonly instantiationService: IInstantiationService,
 		@IOpenerService openerService: IOpenerService,
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
-		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 		this.initialize();
@@ -51,7 +47,7 @@ export class LeapfrogPreferencesView extends ViewPane {
 		// Try to get the preferences service (will be undefined in browser context)
 		try {
 			this.preferencesService = this.instantiationService.invokeFunction(
-				(accessor) => accessor.get(ILeapfrogIndexPreferencesService, null as any)
+				(accessor) => accessor.get(ILeapfrogIndexPreferencesService)
 			);
 		} catch {
 			// Service not available in this context
@@ -84,7 +80,7 @@ export class LeapfrogPreferencesView extends ViewPane {
 		}
 	}
 
-	private render(): void {
+	protected override render(): void {
 		if (!this.container) {
 			return;
 		}
@@ -155,8 +151,8 @@ export class LeapfrogPreferencesView extends ViewPane {
 		const fileList = append(section, $('ul.file-list'));
 		for (const file of files) {
 			const fileItem = append(fileList, $('li.file-item'));
-			const fileName = append(fileItem, $('span.file-name', {}, file.fileName));
-			const filePath = append(fileItem, $('span.file-path', {}, file.path));
+			append(fileItem, $('span.file-name', {}, file.fileName));
+			append(fileItem, $('span.file-path', {}, file.path));
 
 			if (file.reason) {
 				const reason = append(fileItem, $('span.file-reason', {}, file.reason));

@@ -922,7 +922,7 @@ export class ShowInstalledMcpServersCommand extends Action2 {
 
 	async run(accessor: ServicesAccessor) {
 		const viewsService = accessor.get(IViewsService);
-		const view = await viewsService.openView(InstalledMcpServersViewId, true);
+		await viewsService.openView(InstalledMcpServersViewId, true);
 		// Leapfrog: MCP servers view has been disabled
 		// if (!view) {
 		// 	await viewsService.openViewContainer(VIEW_CONTAINER.id);

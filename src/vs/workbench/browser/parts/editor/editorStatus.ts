@@ -28,8 +28,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ILanguageService, ILanguageSelection } from '../../../../editor/common/languages/language.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { Selection } from '../../../../editor/common/core/selection.js';
-import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { IExtensionGalleryService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { EncodingMode, IEncodingSupport, ILanguageSupport, ITextFileService } from '../../../services/textfile/common/textfiles.js';
 import { SUPPORTED_ENCODINGS } from '../../../services/textfile/common/encoding.js';
 import { ConfigurationChangedEvent, EditorOption } from '../../../../editor/common/config/editorOptions.js';

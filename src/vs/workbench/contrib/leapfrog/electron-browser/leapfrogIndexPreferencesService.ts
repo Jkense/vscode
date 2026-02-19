@@ -20,10 +20,8 @@ import {
 	ILeapfrogIndexPreferencesService,
 	ILeapfrogIndexPreferences,
 	IIndexableFile,
-	ILeapfrogIndexService,
-	LeapfrogConfigurationKeys,
 } from '../common/leapfrog.js';
-import { LeapfrogIndexJsonDatabase, type IIndexedChunkRow } from './leapfrogIndexJsonDatabase.js';
+import { LeapfrogIndexJsonDatabase } from './leapfrogIndexJsonDatabase.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,9 +32,6 @@ const DEFAULT_INCLUDE_PATTERNS = ['**/*.md', '**/*.markdown', '**/*.txt', '**/*.
 
 /** Default patterns to exclude from indexing */
 const DEFAULT_EXCLUDE_PATTERNS = ['.git', '.leapfrog', '.vscode', 'node_modules', '.DS_Store'];
-
-/** Number of files to scan per batch */
-const SCAN_BATCH_SIZE = 50;
 
 // ---------------------------------------------------------------------------
 // Service
@@ -111,7 +106,7 @@ export class LeapfrogIndexPreferencesService extends Disposable implements ILeap
 	// -----------------------------------------------------------------------
 
 	private loadPreferences(): void {
-		const config = this.configurationService.getValue('leapfrog.index');
+		const config = this.configurationService.getValue('leapfrog.index') as { includePatterns?: string[]; excludePatterns?: string[]; autoIndex?: boolean } | undefined;
 
 		if (config) {
 			this.preferences.includePatterns = config.includePatterns || DEFAULT_INCLUDE_PATTERNS;
@@ -129,20 +124,17 @@ export class LeapfrogIndexPreferencesService extends Disposable implements ILeap
 	}
 
 	async updatePreferences(data: { includePatterns?: string[]; excludePatterns?: string[]; autoIndex?: boolean }): Promise<void> {
-		const updates: Record<string, string[] | boolean> = {};
-
 		if (data.includePatterns !== undefined) {
-			updates[`leapfrog.index.includePatterns`] = data.includePatterns;
+			await this.configurationService.updateValue('leapfrog.index.includePatterns', data.includePatterns);
 		}
 		if (data.excludePatterns !== undefined) {
-			updates[`leapfrog.index.excludePatterns`] = data.excludePatterns;
+			await this.configurationService.updateValue('leapfrog.index.excludePatterns', data.excludePatterns);
 		}
 		if (data.autoIndex !== undefined) {
-			updates[`leapfrog.index.autoIndex`] = data.autoIndex;
+			await this.configurationService.updateValue('leapfrog.index.autoIndex', data.autoIndex);
 		}
 
-		if (Object.keys(updates).length > 0) {
-			await this.configurationService.updateValue(updates, true);
+		if (Object.keys(data).length > 0) {
 			await this.loadPreferences();
 			this._onDidChangePreferences.fire();
 		}

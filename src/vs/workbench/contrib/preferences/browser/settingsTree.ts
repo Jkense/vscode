@@ -1131,9 +1131,7 @@ class SettingGroupRenderer implements ITreeRenderer<SettingsTreeGroupElement, ne
 export class SettingNewExtensionsRenderer implements ITreeRenderer<SettingsTreeNewExtensionsElement, never, ISettingNewExtensionsTemplate> {
 	templateId = SETTINGS_NEW_EXTENSIONS_TEMPLATE_ID;
 
-	constructor(
-		@ICommandService private readonly _commandService_disabled: ICommandService,
-	) {
+	constructor() {
 	}
 
 	renderTemplate(container: HTMLElement): ISettingNewExtensionsTemplate {

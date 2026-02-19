@@ -79,7 +79,7 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 	constructor(
 		@IFileService private readonly fileService: IFileService,
 		@ILogService private readonly logService: ILogService,
-		@ILeapfrogApiKeyService private readonly apiKeyService: ILeapfrogApiKeyService, // used in constructor below
+		@ILeapfrogApiKeyService apiKeyService: ILeapfrogApiKeyService,
 	) {
 		super();
 		this.db = this._register(new LeapfrogIndexJsonDatabase(fileService));
