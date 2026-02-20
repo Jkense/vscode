@@ -3,57 +3,71 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as nls from '../../../../../nls.js';
-import { IViewletViewOptions } from '../../../../browser/parts/views/viewsViewlet.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { ViewPane, IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { IViewDescriptorService } from '../../../../common/views.js';
-import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import { ILocalizedString } from '../../../../../platform/action/common/action.js';
-import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
-import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { URI } from '../../../../../base/common/uri.js';
-import { $, append } from '../../../../../base/browser/dom.js';
-import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { IAsyncDataSource, ITreeNode, ITreeRenderer } from '../../../../../base/browser/ui/tree/tree.js';
-import { IListVirtualDelegate, IIdentityProvider } from '../../../../../base/browser/ui/list/list.js';
-import { IListAccessibilityProvider } from '../../../../../base/browser/ui/list/listWidget.js';
-import { WorkbenchAsyncDataTree } from '../../../../../platform/list/browser/listService.js';
-import { FuzzyScore } from '../../../../../base/common/filters.js';
+import * as nls from "../../../../../nls.js";
+import { IViewletViewOptions } from "../../../../browser/parts/views/viewsViewlet.js";
+import { IInstantiationService } from "../../../../../platform/instantiation/common/instantiation.js";
+import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
+import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
+import {
+	ViewPane,
+	IViewPaneOptions,
+} from "../../../../browser/parts/views/viewPane.js";
+import { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { IViewDescriptorService } from "../../../../common/views.js";
+import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
+import { ILocalizedString } from "../../../../../platform/action/common/action.js";
+import { IHoverService } from "../../../../../platform/hover/browser/hover.js";
+import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
+import { URI } from "../../../../../base/common/uri.js";
+import {
+	$,
+	append,
+	addDisposableListener,
+} from "../../../../../base/browser/dom.js";
+import { IEditorService } from "../../../../services/editor/common/editorService.js";
+import { ICodeEditor } from "../../../../../editor/browser/editorBrowser.js";
+import { DisposableStore } from "../../../../../base/common/lifecycle.js";
+import {
+	IAsyncDataSource,
+	ITreeNode,
+	ITreeRenderer,
+} from "../../../../../base/browser/ui/tree/tree.js";
+import {
+	IListVirtualDelegate,
+	IIdentityProvider,
+} from "../../../../../base/browser/ui/list/list.js";
+import { IListAccessibilityProvider } from "../../../../../base/browser/ui/list/listWidget.js";
+import { WorkbenchAsyncDataTree } from "../../../../../platform/list/browser/listService.js";
+import { FuzzyScore } from "../../../../../base/common/filters.js";
 import {
 	LEAPFROG_TAGS_VIEW_ID,
 	ILeapfrogTagService,
 	ILeapfrogTagWithCount,
 	ILeapfrogTagFileGroup,
 	ILeapfrogTagApplication,
-} from '../../common/leapfrog.js';
-import { LeapfrogConfigurationKeys } from '../../common/leapfrogConfiguration.js';
+} from "../../common/leapfrog.js";
+import { LeapfrogConfigurationKeys } from "../../common/leapfrogConfiguration.js";
 
 // ---------------------------------------------------------------------------
 // Tree element types
 // ---------------------------------------------------------------------------
 
 interface TagElement {
-	readonly type: 'tag';
+	readonly type: "tag";
 	readonly tag: ILeapfrogTagWithCount;
 }
 
 interface FileGroupElement {
-	readonly type: 'file';
+	readonly type: "file";
 	readonly tagId: string;
 	readonly group: ILeapfrogTagFileGroup;
 }
 
 interface SnippetElement {
-	readonly type: 'snippet';
+	readonly type: "snippet";
 	readonly application: ILeapfrogTagApplication;
 	readonly tagColor: string;
 }
@@ -61,7 +75,7 @@ interface SnippetElement {
 type TagTreeElement = TagElement | FileGroupElement | SnippetElement;
 
 // Sentinel input for the root of the tree
-const TAG_TREE_INPUT = Symbol('TagTreeInput');
+const TAG_TREE_INPUT = Symbol("TagTreeInput");
 type TagTreeInput = typeof TAG_TREE_INPUT;
 
 // ---------------------------------------------------------------------------
@@ -69,12 +83,14 @@ type TagTreeInput = typeof TAG_TREE_INPUT;
 // ---------------------------------------------------------------------------
 
 class TagTreeVirtualDelegate implements IListVirtualDelegate<TagTreeElement> {
-
 	getHeight(element: TagTreeElement): number {
 		switch (element.type) {
-			case 'tag': return 28;
-			case 'file': return 24;
-			case 'snippet': return 22;
+			case "tag":
+				return 28;
+			case "file":
+				return 24;
+			case "snippet":
+				return 22;
 		}
 	}
 
@@ -88,12 +104,14 @@ class TagTreeVirtualDelegate implements IListVirtualDelegate<TagTreeElement> {
 // ---------------------------------------------------------------------------
 
 class TagTreeIdentityProvider implements IIdentityProvider<TagTreeElement> {
-
 	getId(element: TagTreeElement): string {
 		switch (element.type) {
-			case 'tag': return `tag:${element.tag.id}`;
-			case 'file': return `file:${element.tagId}:${element.group.filePath}`;
-			case 'snippet': return `snippet:${element.application.id}`;
+			case "tag":
+				return `tag:${element.tag.id}`;
+			case "file":
+				return `file:${element.tagId}:${element.group.filePath}`;
+			case "snippet":
+				return `snippet:${element.application.id}`;
 		}
 	}
 }
@@ -103,16 +121,18 @@ class TagTreeIdentityProvider implements IIdentityProvider<TagTreeElement> {
 // ---------------------------------------------------------------------------
 
 class TagTreeAccessibilityProvider implements IListAccessibilityProvider<TagTreeElement> {
-
 	getWidgetAriaLabel(): string {
-		return nls.localize('leapfrogTagsTree', "Tags");
+		return nls.localize("leapfrogTagsTree", "Tags");
 	}
 
 	getAriaLabel(element: TagTreeElement): string {
 		switch (element.type) {
-			case 'tag': return `${element.tag.name} (${element.tag.applicationCount})`;
-			case 'file': return element.group.fileName;
-			case 'snippet': return element.application.selectedText;
+			case "tag":
+				return `${element.tag.name} (${element.tag.applicationCount})`;
+			case "file":
+				return element.group.fileName;
+			case "snippet":
+				return element.application.selectedText;
 		}
 	}
 }
@@ -121,55 +141,68 @@ class TagTreeAccessibilityProvider implements IListAccessibilityProvider<TagTree
 // Data source
 // ---------------------------------------------------------------------------
 
-class TagTreeDataSource implements IAsyncDataSource<TagTreeInput, TagTreeElement> {
-
-	constructor(
-		private readonly tagService: ILeapfrogTagService,
-	) { }
+class TagTreeDataSource implements IAsyncDataSource<
+	TagTreeInput,
+	TagTreeElement
+> {
+	constructor(private readonly tagService: ILeapfrogTagService) {}
 
 	hasChildren(element: TagTreeInput | TagTreeElement): boolean {
 		if (element === TAG_TREE_INPUT) {
 			return true;
 		}
 		switch (element.type) {
-			case 'tag': return element.tag.applicationCount > 0 || element.tag.children.length > 0;
-			case 'file': return element.group.applications.length > 0;
-			case 'snippet': return false;
+			case "tag":
+				return (
+					element.tag.applicationCount > 0 || element.tag.children.length > 0
+				);
+			case "file":
+				return element.group.applications.length > 0;
+			case "snippet":
+				return false;
 		}
 	}
 
-	async getChildren(element: TagTreeInput | TagTreeElement): Promise<TagTreeElement[]> {
+	async getChildren(
+		element: TagTreeInput | TagTreeElement,
+	): Promise<TagTreeElement[]> {
 		if (element === TAG_TREE_INPUT) {
 			const tags = await this.tagService.getTags();
-			return tags.map(tag => ({ type: 'tag' as const, tag }));
+			return tags.map((tag) => ({ type: "tag" as const, tag }));
 		}
 
 		switch (element.type) {
-			case 'tag': {
+			case "tag": {
 				const children: TagTreeElement[] = [];
 
 				// Child tags first
 				for (const child of element.tag.children) {
-					children.push({ type: 'tag' as const, tag: child });
+					children.push({ type: "tag" as const, tag: child });
 				}
 
 				// Then file groups
 				if (element.tag.applicationCount > 0) {
-					const groups = await this.tagService.getApplicationsForTag(element.tag.id);
+					const groups = await this.tagService.getApplicationsForTag(
+						element.tag.id,
+					);
 					for (const group of groups) {
-						children.push({ type: 'file' as const, tagId: element.tag.id, group });
+						children.push({
+							type: "file" as const,
+							tagId: element.tag.id,
+							group,
+						});
 					}
 				}
 				return children;
 			}
-			case 'file': {
-				return element.group.applications.map(app => ({
-					type: 'snippet' as const,
+			case "file": {
+				return element.group.applications.map((app) => ({
+					type: "snippet" as const,
 					application: app,
-					tagColor: '', // Color comes from parent
+					tagColor: "", // Color comes from parent
 				}));
 			}
-			case 'snippet':
+			case "snippet":
 				return [];
 		}
 	}
@@ -187,48 +220,76 @@ interface TagTemplate {
 	readonly name: HTMLElement;
 	readonly count: HTMLElement;
 	readonly actions: HTMLElement;
+	readonly colorButton: HTMLElement;
 	readonly editButton: HTMLElement;
 	readonly deleteButton: HTMLElement;
 	readonly disposables: DisposableStore;
 }
 
-class TagRenderer implements ITreeRenderer<TagElement, FuzzyScore, TagTemplate> {
-
-	static readonly TEMPLATE_ID = 'tag';
+class TagRenderer implements ITreeRenderer<
+	TagElement,
+	FuzzyScore,
+	TagTemplate
+> {
+	static readonly TEMPLATE_ID = "tag";
 	readonly templateId = TagRenderer.TEMPLATE_ID;
 
 	constructor(
 		private readonly onEdit: (tag: ILeapfrogTagWithCount) => void,
+		private readonly onColorChange: (tag: ILeapfrogTagWithCount) => void,
 		private readonly onDelete: (tag: ILeapfrogTagWithCount) => void,
-	) { }
+	) {}
 
 	renderTemplate(container: HTMLElement): TagTemplate {
-		const el = append(container, $('.leapfrog-tag-item'));
-		const colorDot = append(el, $('.leapfrog-tag-color'));
-		const name = append(el, $('.leapfrog-tag-name'));
-		const count = append(el, $('.leapfrog-tag-count'));
-		const actions = append(el, $('.leapfrog-tag-actions'));
+		const el = append(container, $(".leapfrog-tag-item"));
+		const colorDot = append(el, $(".leapfrog-tag-color"));
+		const name = append(el, $(".leapfrog-tag-name"));
+		const count = append(el, $(".leapfrog-tag-count"));
+		const actions = append(el, $(".leapfrog-tag-actions"));
 
-		const editButton = append(actions, $('button.leapfrog-tag-action-btn'));
-		editButton.title = nls.localize('editTag', "Edit Tag");
-		editButton.classList.add('codicon', 'codicon-edit');
+		const colorButton = append(actions, $("button.leapfrog-tag-action-btn"));
+		colorButton.title = nls.localize("changeColor", "Change color");
+		colorButton.classList.add("codicon", "codicon-paintcan");
 
-		const deleteButton = append(actions, $('button.leapfrog-tag-action-btn'));
-		deleteButton.title = nls.localize('deleteTag', "Delete Tag");
-		deleteButton.classList.add('codicon', 'codicon-trash');
+		const editButton = append(actions, $("button.leapfrog-tag-action-btn"));
+		editButton.title = nls.localize("editTag", "Edit Tag");
+		editButton.classList.add("codicon", "codicon-edit");
 
-		return { container: el, colorDot, name, count, actions, editButton, deleteButton, disposables: new DisposableStore() };
+		const deleteButton = append(actions, $("button.leapfrog-tag-action-btn"));
+		deleteButton.title = nls.localize("deleteTag", "Delete Tag");
+		deleteButton.classList.add("codicon", "codicon-trash");
+
+		return {
+			container: el,
+			colorDot,
+			name,
+			count,
+			actions,
+			colorButton,
+			editButton,
+			deleteButton,
+			disposables: new DisposableStore(),
+		};
 	}
 
-	renderElement(node: ITreeNode<TagElement, FuzzyScore>, _index: number, template: TagTemplate): void {
+	renderElement(
+		node: ITreeNode<TagElement, FuzzyScore>,
+		_index: number,
+		template: TagTemplate,
+	): void {
 		const { tag } = node.element;
 
 		template.colorDot.style.backgroundColor = tag.color;
 		template.name.textContent = tag.name;
 		template.count.textContent = String(tag.applicationCount);
-		template.count.style.display = tag.applicationCount > 0 ? '' : 'none';
+		template.count.style.display = tag.applicationCount > 0 ? "" : "none";
 
 		template.disposables.clear();
+
+		template.colorButton.onclick = (e) => {
+			e.stopPropagation();
+			this.onColorChange(tag);
+		};
 
 		template.editButton.onclick = (e) => {
 			e.stopPropagation();
@@ -254,24 +315,31 @@ interface FileGroupTemplate {
 	readonly name: HTMLElement;
 }
 
-class FileGroupRenderer implements ITreeRenderer<FileGroupElement, FuzzyScore, FileGroupTemplate> {
-
-	static readonly TEMPLATE_ID = 'file';
+class FileGroupRenderer implements ITreeRenderer<
+	FileGroupElement,
+	FuzzyScore,
+	FileGroupTemplate
+> {
+	static readonly TEMPLATE_ID = "file";
 	readonly templateId = FileGroupRenderer.TEMPLATE_ID;
 
 	renderTemplate(container: HTMLElement): FileGroupTemplate {
-		const el = append(container, $('.leapfrog-file-group'));
-		const icon = append(el, $('span.codicon.codicon-file'));
-		const name = append(el, $('.leapfrog-file-name'));
+		const el = append(container, $(".leapfrog-file-group"));
+		const icon = append(el, $("span.codicon.codicon-file"));
+		const name = append(el, $(".leapfrog-file-name"));
 		return { container: el, icon, name };
 	}
 
-	renderElement(node: ITreeNode<FileGroupElement, FuzzyScore>, _index: number, template: FileGroupTemplate): void {
+	renderElement(
+		node: ITreeNode<FileGroupElement, FuzzyScore>,
+		_index: number,
+		template: FileGroupTemplate,
+	): void {
 		template.name.textContent = node.element.group.fileName;
 		template.name.title = node.element.group.filePath;
 	}
 
-	disposeTemplate(_template: FileGroupTemplate): void { }
+	disposeTemplate(_template: FileGroupTemplate): void {}
 }
 
 // -- Snippet renderer -------------------------------------------------------
@@ -279,29 +347,67 @@ class FileGroupRenderer implements ITreeRenderer<FileGroupElement, FuzzyScore, F
 interface SnippetTemplate {
 	readonly container: HTMLElement;
 	readonly quote: HTMLElement;
+	readonly removeButton: HTMLElement;
+	readonly disposables: DisposableStore;
 }
 
-class SnippetRenderer implements ITreeRenderer<SnippetElement, FuzzyScore, SnippetTemplate> {
-
-	static readonly TEMPLATE_ID = 'snippet';
+class SnippetRenderer implements ITreeRenderer<
+	SnippetElement,
+	FuzzyScore,
+	SnippetTemplate
+> {
+	static readonly TEMPLATE_ID = "snippet";
 	readonly templateId = SnippetRenderer.TEMPLATE_ID;
 
+	constructor(
+		private readonly onRemove: (application: ILeapfrogTagApplication) => void,
+	) {}
+
 	renderTemplate(container: HTMLElement): SnippetTemplate {
-		const el = append(container, $('.leapfrog-snippet'));
-		const quote = append(el, $('.leapfrog-snippet-text'));
-		return { container: el, quote };
+		const el = append(container, $(".leapfrog-snippet"));
+		const quote = append(el, $(".leapfrog-snippet-text"));
+		const actions = append(el, $(".leapfrog-snippet-actions"));
+		const removeButton = append(
+			actions,
+			$("button.leapfrog-snippet-action-btn.codicon.codicon-close"),
+		);
+		removeButton.title = nls.localize(
+			"removeTag",
+			"Remove tag from this selection",
+		);
+		return {
+			container: el,
+			quote,
+			removeButton,
+			disposables: new DisposableStore(),
+		};
 	}
 
-	renderElement(node: ITreeNode<SnippetElement, FuzzyScore>, _index: number, template: SnippetTemplate): void {
+	renderElement(
+		node: ITreeNode<SnippetElement, FuzzyScore>,
+		_index: number,
+		template: SnippetTemplate,
+	): void {
 		const text = node.element.application.selectedText;
 		// Truncate long snippets
 		const maxLen = 80;
-		const display = text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
+		const display =
+			text.length > maxLen ? text.substring(0, maxLen) + "..." : text;
 		template.quote.textContent = `"${display}"`;
 		template.quote.title = text;
+
+		template.disposables.clear();
+		template.disposables.add(
+			addDisposableListener(template.removeButton, "click", (e) => {
+				e.stopPropagation();
+				this.onRemove(node.element.application);
+			}),
+		);
 	}
 
-	disposeTemplate(_template: SnippetTemplate): void { }
+	disposeTemplate(template: SnippetTemplate): void {
+		template.disposables.dispose();
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -309,11 +415,15 @@ class SnippetRenderer implements ITreeRenderer<SnippetElement, FuzzyScore, Snipp
 // ---------------------------------------------------------------------------
 
 export class LeapfrogTagsView extends ViewPane {
-
 	static readonly ID: string = LEAPFROG_TAGS_VIEW_ID;
-	static readonly NAME: ILocalizedString = nls.localize2('leapfrogTags', "Tags");
+	static readonly NAME: ILocalizedString = nls.localize2(
+		"leapfrogTags",
+		"Tags",
+	);
 
-	private tree: WorkbenchAsyncDataTree<TagTreeInput, TagTreeElement, FuzzyScore> | undefined;
+	private tree:
+		| WorkbenchAsyncDataTree<TagTreeInput, TagTreeElement, FuzzyScore>
+		| undefined;
 	private treeContainer: HTMLElement | undefined;
 	private searchInput: HTMLInputElement | undefined;
 
@@ -324,7 +434,8 @@ export class LeapfrogTagsView extends ViewPane {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IContextMenuService contextMenuService: IContextMenuService,
-		@IConfigurationService private readonly _configurationService: IConfigurationService,
+		@IConfigurationService
+		private readonly _configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IOpenerService openerService: IOpenerService,
 		@IHoverService hoverService: IHoverService,
@@ -333,36 +444,49 @@ export class LeapfrogTagsView extends ViewPane {
 		@IDialogService private readonly dialogService: IDialogService,
 		@IEditorService private readonly editorService: IEditorService,
 	) {
-		super(options as IViewPaneOptions, keybindingService, contextMenuService, _configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
+		super(
+			options as IViewPaneOptions,
+			keybindingService,
+			contextMenuService,
+			_configurationService,
+			contextKeyService,
+			viewDescriptorService,
+			instantiationService,
+			openerService,
+			themeService,
+			hoverService,
+		);
 
 		// Re-render tree when tags or applications change
 		this._register(this.tagService.onDidChangeTags(() => this.refresh()));
-		this._register(this.tagService.onDidChangeTagApplications(() => this.refresh()));
+		this._register(
+			this.tagService.onDidChangeTagApplications(() => this.refresh()),
+		);
 	}
 
 	protected override renderBody(container: HTMLElement): void {
 		super.renderBody(container);
 
-		container.classList.add('leapfrog-tags-view');
+		container.classList.add("leapfrog-tags-view");
 
 		// Toolbar
-		const toolbar = append(container, $('.leapfrog-tags-toolbar'));
+		const toolbar = append(container, $(".leapfrog-tags-toolbar"));
 
 		// Add tag button
-		const addTagButton = append(toolbar, $('button.leapfrog-tags-add-btn'));
-		addTagButton.title = nls.localize('addTag', "Add Tag");
-		addTagButton.classList.add('codicon', 'codicon-add');
+		const addTagButton = append(toolbar, $("button.leapfrog-tags-add-btn"));
+		addTagButton.title = nls.localize("addTag", "Add Tag");
+		addTagButton.classList.add("codicon", "codicon-add");
 		addTagButton.onclick = () => this.addTag();
 
 		// Search input
-		const searchContainer = append(toolbar, $('.leapfrog-tags-search'));
-		this.searchInput = append(searchContainer, $('input')) as HTMLInputElement;
-		this.searchInput.type = 'text';
-		this.searchInput.placeholder = nls.localize('searchTags', "Filter tags...");
+		const searchContainer = append(toolbar, $(".leapfrog-tags-search"));
+		this.searchInput = append(searchContainer, $("input")) as HTMLInputElement;
+		this.searchInput.type = "text";
+		this.searchInput.placeholder = nls.localize("searchTags", "Filter tags...");
 		this.searchInput.oninput = () => this.onSearchChanged();
 
 		// Tree container
-		this.treeContainer = append(container, $('.leapfrog-tags-tree-container'));
+		this.treeContainer = append(container, $(".leapfrog-tags-tree-container"));
 
 		this.createTree();
 	}
@@ -379,18 +503,19 @@ export class LeapfrogTagsView extends ViewPane {
 
 		const tagRenderer = new TagRenderer(
 			(tag) => this.editTag(tag),
+			(tag) => this.changeTagColor(tag),
 			(tag) => this.deleteTag(tag),
 		);
 
 		const renderers = [
 			tagRenderer,
 			new FileGroupRenderer(),
-			new SnippetRenderer(),
+			new SnippetRenderer((app) => this.removeTagApplication(app)),
 		];
 
 		this.tree = this.instantiationService.createInstance(
 			WorkbenchAsyncDataTree,
-			'LeapfrogTags',
+			"LeapfrogTags",
 			this.treeContainer,
 			delegate,
 			renderers,
@@ -400,18 +525,20 @@ export class LeapfrogTagsView extends ViewPane {
 				identityProvider,
 				accessibilityProvider,
 				collapseByDefault: () => true,
-			}
+			},
 		) as WorkbenchAsyncDataTree<TagTreeInput, TagTreeElement, FuzzyScore>;
 
 		this._register(this.tree);
 
 		// Open file & select text when clicking a snippet or file group
-		this._register(this.tree.onDidChangeSelection(e => {
-			const element = e.elements[0];
-			if (element) {
-				this.onTreeElementSelected(element);
-			}
-		}));
+		this._register(
+			this.tree.onDidChangeSelection((e) => {
+				const element = e.elements[0];
+				if (element) {
+					this.onTreeElementSelected(element);
+				}
+			}),
+		);
 
 		// Set input to load data
 		this.tree.setInput(TAG_TREE_INPUT);
@@ -428,13 +555,14 @@ export class LeapfrogTagsView extends ViewPane {
 	// -----------------------------------------------------------------------
 
 	private async onTreeElementSelected(element: TagTreeElement): Promise<void> {
-		if (element.type === 'tag') {
+		if (element.type === "tag") {
 			return;
 		}
 
-		const filePath = element.type === 'file'
-			? element.group.filePath
-			: element.application.fileId;
+		const filePath =
+			element.type === "file"
+				? element.group.filePath
+				: element.application.fileId;
 		const resource = URI.file(filePath);
 
 		const pane = await this.editorService.openEditor({ resource });
@@ -442,11 +570,11 @@ export class LeapfrogTagsView extends ViewPane {
 			return;
 		}
 
-		if (element.type === 'snippet') {
+		if (element.type === "snippet") {
 			const control = pane.getControl() as ICodeEditor | undefined;
-			if (control && typeof control.getModel === 'function') {
+			if (control && typeof control.getModel === "function") {
 				const model = control.getModel();
-				if (model && typeof model.getPositionAt === 'function') {
+				if (model && typeof model.getPositionAt === "function") {
 					const start = model.getPositionAt(element.application.startOffset);
 					const end = model.getPositionAt(element.application.endOffset);
 					const range = {
@@ -469,14 +597,14 @@ export class LeapfrogTagsView extends ViewPane {
 	private async addTag(): Promise<void> {
 		// Step 1: Get tag name
 		const name = await this.quickInputService.input({
-			placeHolder: nls.localize('tagName', "Tag name"),
-			prompt: nls.localize('enterTagName', "Enter a name for the new tag"),
+			placeHolder: nls.localize("tagName", "Tag name"),
+			prompt: nls.localize("enterTagName", "Enter a name for the new tag"),
 			validateInput: async (value) => {
 				if (!value || !value.trim()) {
-					return nls.localize('tagNameRequired', "Tag name is required");
+					return nls.localize("tagNameRequired", "Tag name is required");
 				}
 				return undefined;
-			}
+			},
 		});
 
 		if (!name) {
@@ -484,9 +612,19 @@ export class LeapfrogTagsView extends ViewPane {
 		}
 
 		// Step 2: Pick a color
-		const defaultColors = this._configurationService.getValue<string[]>(LeapfrogConfigurationKeys.TagColors) || [
-			'#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6',
-			'#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'
+		const defaultColors = this._configurationService.getValue<string[]>(
+			LeapfrogConfigurationKeys.TagColors,
+		) || [
+			"#22c55e",
+			"#ef4444",
+			"#3b82f6",
+			"#f59e0b",
+			"#8b5cf6",
+			"#ec4899",
+			"#06b6d4",
+			"#f97316",
+			"#14b8a6",
+			"#6366f1",
 		];
 
 		const colorItems = defaultColors.map((color, i) => ({
@@ -496,10 +634,12 @@ export class LeapfrogTagsView extends ViewPane {
 		}));
 
 		const picked = await this.quickInputService.pick(colorItems, {
-			placeHolder: nls.localize('pickColor', "Pick a tag color"),
+			placeHolder: nls.localize("pickColor", "Pick a tag color"),
 		});
 
-		const color = (picked as typeof colorItems[number] | undefined)?.color ?? defaultColors[0];
+		const color =
+			(picked as (typeof colorItems)[number] | undefined)?.color ??
+			defaultColors[0];
 
 		await this.tagService.createTag(name.trim(), color);
 	}
@@ -508,13 +648,13 @@ export class LeapfrogTagsView extends ViewPane {
 		const newName = await this.quickInputService.input({
 			placeHolder: tag.name,
 			value: tag.name,
-			prompt: nls.localize('editTagName', "Edit tag name"),
+			prompt: nls.localize("editTagName", "Edit tag name"),
 			validateInput: async (value) => {
 				if (!value || !value.trim()) {
-					return nls.localize('tagNameRequired', "Tag name is required");
+					return nls.localize("tagNameRequired", "Tag name is required");
 				}
 				return undefined;
-			}
+			},
 		});
 
 		if (newName && newName.trim() !== tag.name) {
@@ -522,19 +662,100 @@ export class LeapfrogTagsView extends ViewPane {
 		}
 	}
 
+	private async changeTagColor(tag: ILeapfrogTagWithCount): Promise<void> {
+		const defaultColors = this._configurationService.getValue<string[]>(
+			LeapfrogConfigurationKeys.TagColors,
+		) || [
+			"#22c55e",
+			"#ef4444",
+			"#3b82f6",
+			"#f59e0b",
+			"#8b5cf6",
+			"#ec4899",
+			"#06b6d4",
+			"#f97316",
+			"#14b8a6",
+			"#6366f1",
+		];
+
+		const colorItems = [
+			...defaultColors.map((color, i) => ({
+				label: `$(circle-filled) Color ${i + 1}`,
+				description: color,
+				color,
+			})),
+			{
+				label: "$(edit) Custom color...",
+				description: "Enter a hex value",
+				color: "__custom__",
+			},
+		];
+
+		const picked = await this.quickInputService.pick(colorItems, {
+			placeHolder: nls.localize(
+				"pickTagColor",
+				"Pick a color for '{0}'",
+				tag.name,
+			),
+		});
+		if (!picked) {
+			return;
+		}
+
+		let finalColor = (picked as (typeof colorItems)[number]).color;
+
+		if (finalColor === "__custom__") {
+			const custom = await this.quickInputService.input({
+				value: tag.color,
+				prompt: nls.localize("customColor", "Enter a hex color (e.g. #ff0000)"),
+				validateInput: (v) => {
+					if (!/^#[0-9a-fA-F]{6}$/.test(v.trim())) {
+						return Promise.resolve(
+							nls.localize(
+								"invalidColor",
+								"Enter a valid 6-digit hex color (e.g. #ff0000)",
+							),
+						);
+					}
+					return Promise.resolve(undefined);
+				},
+			});
+			if (!custom?.trim()) {
+				return;
+			}
+			finalColor = custom.trim();
+		}
+
+		if (finalColor !== tag.color) {
+			await this.tagService.updateTag(tag.id, { color: finalColor });
+		}
+	}
+
 	private async deleteTag(tag: ILeapfrogTagWithCount): Promise<void> {
-		const message = tag.applicationCount > 0
-			? nls.localize('deleteTagWithApps', "Delete tag \"{0}\"? This will also remove {1} tag application(s).", tag.name, tag.applicationCount)
-			: nls.localize('deleteTagConfirm', "Delete tag \"{0}\"?", tag.name);
+		const message =
+			tag.applicationCount > 0
+				? nls.localize(
+						"deleteTagWithApps",
+						'Delete tag "{0}"? This will also remove {1} tag application(s).',
+						tag.name,
+						tag.applicationCount,
+					)
+				: nls.localize("deleteTagConfirm", 'Delete tag "{0}"?', tag.name);
 
 		const result = await this.dialogService.confirm({
 			message,
-			primaryButton: nls.localize('delete', "Delete"),
+			primaryButton: nls.localize("delete", "Delete"),
 		});
 
 		if (result.confirmed) {
 			await this.tagService.deleteTag(tag.id);
 		}
+	}
+
+	private async removeTagApplication(
+		application: ILeapfrogTagApplication,
+	): Promise<void> {
+		await this.tagService.removeTagApplication(application.id);
 	}
 
 	private onSearchChanged(): void {
