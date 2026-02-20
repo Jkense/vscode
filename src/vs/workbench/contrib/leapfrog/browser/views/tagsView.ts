@@ -19,8 +19,10 @@ import { IViewDescriptorService } from "../../../../common/views.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import { ILocalizedString } from "../../../../../platform/action/common/action.js";
 import { IHoverService } from "../../../../../platform/hover/browser/hover.js";
-import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
-import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
+import {
+	IQuickInputService,
+	IQuickPickItem,
+} from "../../../../../platform/quickinput/common/quickInput.js";
 import { URI } from "../../../../../base/common/uri.js";
 import {
 	$,
@@ -441,7 +443,6 @@ export class LeapfrogTagsView extends ViewPane {
 		@IHoverService hoverService: IHoverService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
-		@IDialogService private readonly dialogService: IDialogService,
 		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super(
@@ -678,7 +679,14 @@ export class LeapfrogTagsView extends ViewPane {
 			"#6366f1",
 		];
 
-		const colorItems = [
+		interface ColorPickItem {
+			label: string;
+			description: string;
+			iconPath?: URI;
+			color: string;
+		}
+
+		const colorItems: ColorPickItem[] = [
 			...defaultColors.map((color, i) => {
 				// Create colored circle SVG as data URI
 				const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
@@ -700,18 +708,21 @@ export class LeapfrogTagsView extends ViewPane {
 			},
 		];
 
-		const picked = await this.quickInputService.pick(colorItems, {
-			placeHolder: nls.localize(
-				"pickTagColor",
-				"Pick a color for '{0}'",
-				tag.name,
-			),
-		});
+		const picked = await this.quickInputService.pick(
+			colorItems as unknown as IQuickPickItem[],
+			{
+				placeHolder: nls.localize(
+					"pickTagColor",
+					"Pick a color for '{0}'",
+					tag.name,
+				),
+			},
+		);
 		if (!picked) {
 			return;
 		}
 
-		let finalColor = (picked as (typeof colorItems)[number]).color;
+		let finalColor = (picked as ColorPickItem).color;
 
 		if (finalColor === "__custom__") {
 			const custom = await this.quickInputService.input({
@@ -741,7 +752,7 @@ export class LeapfrogTagsView extends ViewPane {
 	}
 
 	private async deleteTag(tag: ILeapfrogTagWithCount): Promise<void> {
-		const message =
+		const confirmationMessage =
 			tag.applicationCount > 0
 				? nls.localize(
 						"deleteTagWithApps",
@@ -751,12 +762,25 @@ export class LeapfrogTagsView extends ViewPane {
 					)
 				: nls.localize("deleteTagConfirm", 'Delete tag "{0}"?', tag.name);
 
-		const result = await this.dialogService.confirm({
-			message,
-			primaryButton: nls.localize("delete", "Delete"),
+		const confirmOptions: Array<{ label: string; description: string }> = [
+			{
+				label: `$(trash) ${nls.localize("delete", "Delete")}`,
+				description: confirmationMessage,
+			},
+			{
+				label: nls.localize("cancel", "Cancel"),
+				description: "",
+			},
+		];
+
+		const picked = await this.quickInputService.pick(confirmOptions, {
+			placeHolder: nls.localize(
+				"confirmDelete",
+				"Are you sure you want to delete this tag?",
+			),
 		});
 
-		if (result.confirmed) {
+		if (picked?.label.includes(nls.localize("delete", "Delete"))) {
 			await this.tagService.deleteTag(tag.id);
 		}
 	}
