@@ -1,0 +1,218 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Leapfrog Settings Editor - Indexing & Docs */
+
+.leapfrog-settings-editor {
+	overflow: auto;
+	padding: 20px;
+	background-color: var(--vscode-editor-background);
+	color: var(--vscode-editor-foreground);
+	font-family: var(--vscode-editor-font-family);
+	font-size: var(--vscode-editor-font-size);
+}
+
+.indexing-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	width: 100%;
+	max-width: 32rem;
+}
+
+/* Header */
+.indexing-panel header {
+	margin: 0;
+}
+
+.indexing-title {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--vscode-editor-foreground);
+}
+
+.indexing-subtitle {
+	margin: 4px 0 0 0;
+	font-size: 0.875rem;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Cards */
+.settings-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	padding: 0;
+	background-color: var(--vscode-editor-inactiveSelectionBackground, var(--vscode-input-background));
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.settings-card-content {
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-card-content.flex-between {
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+/* Card typography */
+.card-title {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--vscode-editor-foreground);
+}
+
+.card-description {
+	margin: 4px 0 0 0;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.card-description .underline {
+	text-decoration: underline;
+}
+
+.card-description .link-underline {
+	text-decoration: underline;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+}
+
+.card-description .link-underline:hover {
+	color: var(--vscode-textLink-activeForeground);
+}
+
+/* Flex utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-start { align-items: flex-start; }
+.items-start { align-items: flex-start; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.gap-2 { gap: 8px; }
+.gap-1_5 { gap: 6px; }
+.gap-3 { gap: 12px; }
+.pt-1 { padding-top: 4px; }
+
+/* Codebase Indexing - progress */
+.progress-label {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--vscode-editor-foreground);
+}
+
+.file-count {
+	margin: 0;
+	font-size: 0.75rem;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Progress bar */
+.progress-bar {
+	height: 6px;
+	background-color: var(--vscode-scrollbarSlider-background);
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.progress-bar-fill {
+	height: 100%;
+	background-color: var(--vscode-progressBar-background);
+	border-radius: 3px;
+	transition: width 0.2s ease;
+}
+
+.progress-bar.animate-pulse {
+	animation: leapfrog-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes leapfrog-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+/* Dots animation for Syncing */
+.dots-animation {
+	display: inline;
+}
+
+/* Buttons */
+.settings-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border: 1px solid var(--vscode-button-border);
+	border-radius: 4px;
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 500;
+	transition: background-color 0.2s;
+}
+
+.settings-button:hover:not(:disabled) {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.settings-button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.settings-button.outline {
+	background-color: transparent;
+	color: var(--vscode-button-foreground);
+	border-color: var(--vscode-input-border);
+}
+
+.settings-button.outline:hover:not(:disabled) {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.settings-button.sm {
+	padding: 6px 12px;
+	font-size: 12px;
+}
+
+.settings-button .codicon {
+	font-size: 14px;
+}
+
+/* codicon-loading has built-in spin animation */
+
+/* Switch / Checkbox for Index New Folders */
+.settings-switch-container {
+	flex-shrink: 0;
+}
+
+.settings-checkbox {
+	width: 36px;
+	height: 20px;
+	min-width: 36px;
+	min-height: 20px;
+	margin: 0;
+	accent-color: var(--vscode-checkbox-background);
+	cursor: pointer;
+}
+
+/* Help icon */
+.codicon.codicon-question {
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
