@@ -62,6 +62,7 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 		this.initialized = true;
 		this.cachedTags = undefined;
 		this.logService.info('[Leapfrog] Tag service database initialized at', projectPath);
+		this._onDidChangeTags.fire();
 	}
 
 	async close(): Promise<void> {
@@ -80,6 +81,9 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	// -----------------------------------------------------------------------
 
 	async getTags(): Promise<ILeapfrogTagWithCount[]> {
+		if (!this.initialized) {
+			return [];
+		}
 		if (this.cachedTags) {
 			return this.cachedTags;
 		}
@@ -197,6 +201,9 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	}
 
 	async getApplicationsForTag(tagId: string): Promise<ILeapfrogTagFileGroup[]> {
+		if (!this.initialized) {
+			return [];
+		}
 		const rows = await this.db.getApplicationsForTag(tagId);
 
 		// Group by file
@@ -228,6 +235,9 @@ export class LeapfrogTagService extends Disposable implements ILeapfrogTagServic
 	}
 
 	async getApplicationsForFile(filePath: string): Promise<ILeapfrogTagApplicationWithTag[]> {
+		if (!this.initialized) {
+			return [];
+		}
 		const rows = await this.db.getApplicationsForFile(filePath);
 		return rows.map(row => ({
 			id: row.id,

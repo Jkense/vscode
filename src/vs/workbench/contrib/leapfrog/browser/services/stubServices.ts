@@ -35,6 +35,14 @@ import type { IPager } from '../../../../../base/common/paging.js';
 import type { IExtensionEditorOptions } from '../../../extensions/common/extensionsInput.js';
 import { IInlineChatSessionService } from '../../../inlineChat/browser/inlineChatSessionService.js';
 import type { IActiveCodeEditor, ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import {
+	IChatAgentService,
+	type IChatAgent,
+	type IChatAgentData,
+	type IChatAgentResult,
+	type IChatAgentCompletionItem,
+} from '../../../chat/common/participants/chatAgents.js';
+import type { IChatFollowup } from '../../../chat/common/chatService/chatService.js';
 
 /**
  * Stub implementation of IExtensionHostDebugService.
@@ -253,7 +261,111 @@ class StubInlineChatSessionService extends Disposable implements IInlineChatSess
 	}
 }
 
+/**
+ * Stub implementation of IChatAgentService.
+ * Chat infrastructure is disabled in Leapfrog; this stub allows EmptyTextEditorHintContribution,
+ * EmptyCellEditorHintContribution, and other components that depend on chatAgentService to
+ * instantiate without errors.
+ */
+class StubChatAgentService extends Disposable implements IChatAgentService {
+	declare readonly _serviceBrand: undefined;
+
+	readonly hasToolsAgent = false;
+
+	private readonly _onDidChangeAgents = this._register(new Emitter<IChatAgent | undefined>());
+	readonly onDidChangeAgents = this._onDidChangeAgents.event;
+
+	registerAgent(): { dispose(): void } {
+		return { dispose: () => { } };
+	}
+
+	registerAgentImplementation(): { dispose(): void } {
+		return { dispose: () => { } };
+	}
+
+	registerDynamicAgent(): { dispose(): void } {
+		return { dispose: () => { } };
+	}
+
+	registerAgentCompletionProvider(): { dispose(): void } {
+		return { dispose: () => { } };
+	}
+
+	async getAgentCompletionItems(): Promise<IChatAgentCompletionItem[]> {
+		return [];
+	}
+
+	registerChatParticipantDetectionProvider(): { dispose(): void } {
+		return { dispose: () => { } };
+	}
+
+	async detectAgentOrCommand(): Promise<{ agent: IChatAgentData; command?: import('../../../chat/common/participants/chatAgents.js').IChatAgentCommand } | undefined> {
+		return undefined;
+	}
+
+	hasChatParticipantDetectionProviders(): boolean {
+		return false;
+	}
+
+	async invokeAgent(): Promise<IChatAgentResult> {
+		return { metadata: undefined };
+	}
+
+	setRequestTools(): void {
+		// No-op
+	}
+
+	async getFollowups(): Promise<IChatFollowup[]> {
+		return [];
+	}
+
+	async getChatTitle(): Promise<string | undefined> {
+		return undefined;
+	}
+
+	async getChatSummary(): Promise<string | undefined> {
+		return undefined;
+	}
+
+	getAgent(): IChatAgentData | undefined {
+		return undefined;
+	}
+
+	getAgentByFullyQualifiedId(): IChatAgentData | undefined {
+		return undefined;
+	}
+
+	getAgents(): IChatAgentData[] {
+		return [];
+	}
+
+	getActivatedAgents(): IChatAgent[] {
+		return [];
+	}
+
+	getAgentsByName(): IChatAgentData[] {
+		return [];
+	}
+
+	agentHasDupeName(): boolean {
+		return false;
+	}
+
+	getDefaultAgent(): IChatAgent | undefined {
+		return undefined;
+	}
+
+	getContributedDefaultAgent(): IChatAgentData | undefined {
+		return undefined;
+	}
+
+	updateAgent(): void {
+		// No-op
+	}
+}
+
 // Register stub services
 registerSingleton(IExtensionHostDebugService, StubExtensionHostDebugService, InstantiationType.Delayed);
 registerSingleton(IExtensionsWorkbenchService, StubExtensionsWorkbenchService, InstantiationType.Eager);
 registerSingleton(IInlineChatSessionService, StubInlineChatSessionService, InstantiationType.Delayed);
+registerSingleton(IChatAgentService, StubChatAgentService, InstantiationType.Delayed);
