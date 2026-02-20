@@ -26,16 +26,15 @@ import {
 	ILeapfrogTranscriptionOptions,
 	ILeapfrogTranscript,
 	ILeapfrogTranscriptSegment,
-	ILeapfrogTranscriptWord,
 	ILeapfrogSpeaker,
 } from '../common/leapfrog.js';
-import { ILeapfrogConfiguration } from '../common/leapfrogConfiguration.js';
+import { ILeapfrogConfiguration, LeapfrogConfigurationKeys } from '../common/leapfrogConfiguration.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
 
-const ASSEMBLYAI_BASE = 'https://api.assemblyai.com/v2';
-const API_KEY_STORAGE_KEY = 'leapfrog.apiKey.assemblyai';
 const CLERK_TOKEN_STORAGE_KEY = 'leapfrog.auth.clerkToken';
 const PROJECT_ID_STORAGE_KEY = 'leapfrog.project.id';
-const POLLING_INTERVAL_MS = 3000;
 const BACKEND_POLLING_INTERVAL_MS = 5000;
 const POLLING_TIMEOUT_MS = 600_000; // 10 minutes
 
@@ -63,6 +62,8 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		@ILogService private readonly logService: ILogService,
 		@ISecretStorageService private readonly secretStorageService: ISecretStorageService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@IFileService private readonly fileService: IFileService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Transcription Service initialized');
@@ -73,21 +74,30 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	// -----------------------------------------------------------------------
 
 	async transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
-		// Try backend-orchestrated flow first if configured
 		const backendUrl = this.getBackendUrl();
-		const projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
+		let projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
 		const clerkToken = await this.secretStorageService.get(CLERK_TOKEN_STORAGE_KEY);
+
+		// Use LeapfrogProjectConfig for projectId when secret storage is empty
+		if (!projectId) {
+			const folders = this.workspaceContextService.getWorkspace().folders;
+			if (folders.length > 0) {
+				const projectPath = folders[0].uri.fsPath;
+				const projectConfig = new LeapfrogProjectConfig(this.fileService);
+				projectId = await projectConfig.getOrCreateProjectId(projectPath);
+			}
+		}
 
 		if (backendUrl && projectId && clerkToken) {
 			try {
 				return await this.transcribeViaBackend(filePath, options, backendUrl, projectId, clerkToken);
 			} catch (err) {
-				this.logService.warn('[Leapfrog] Backend transcription failed, falling back to direct flow:', err);
+				this.logService.error('[Leapfrog] Backend transcription failed:', err);
+				throw err;
 			}
 		}
 
-		// Fallback: direct AssemblyAI flow
-		return this.transcribeDirectly(filePath, options);
+		throw new Error('Transcription requires a Leapfrog account. Run **Leapfrog: Connect to Leapfrog** to sign in and link your workspace.');
 	}
 
 	private async transcribeViaBackend(
@@ -297,49 +307,16 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		try {
 			const g = globalThis as { process?: { env?: Record<string, string> } };
 			if (g.process?.env) {
-				return g.process.env['NEXT_PUBLIC_API_URL'] ?? g.process.env['LEAPFROG_API_URL'];
+				const envUrl = g.process.env['NEXT_PUBLIC_API_URL'] ?? g.process.env['LEAPFROG_API_URL'];
+				if (envUrl) {
+					return envUrl;
+				}
 			}
 		} catch {
 			// process not available in sandboxed renderer
 		}
-		return undefined;
-	}
-
-	private async transcribeDirectly(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
-		const apiKey = await this.getApiKey();
-
-		// Merge provided options with configuration defaults
-		const mergedOptions = this.mergeWithConfigurationDefaults(options);
-
-		const body: Record<string, unknown> = {
-			audio_url: filePath,
-			// Speaker diarization is ALWAYS enabled
-			speaker_labels: true,
-			language_detection: mergedOptions.language === 'auto' || mergedOptions.languageDetection,
-			punctuate: mergedOptions.punctuate,
-			format_text: mergedOptions.formatText,
-			sentiment_analysis: mergedOptions.sentimentAnalysis,
-			entity_detection: mergedOptions.entityDetection,
-			auto_chapters: mergedOptions.autoChapters,
-			auto_highlights: mergedOptions.autoHighlights,
-			disfluencies: mergedOptions.disfluencies,
-			filter_profanity: mergedOptions.filterProfanity,
-		};
-
-		// Set specific language if not auto
-		if (mergedOptions.language && mergedOptions.language !== 'auto') {
-			body.language_code = this.normalizeLanguage(mergedOptions.language);
-		}
-
-		const response = await this.request<RawTranscript>('POST', '/transcript', body, apiKey);
-
-		const transcript = this.mapRaw(response);
-		this.logService.info('[Leapfrog] Transcription submitted directly:', transcript.id, 'with options:', mergedOptions);
-
-		// Start background polling
-		this.pollUntilDone(transcript.id, apiKey);
-
-		return transcript;
+		const configUrl = this.configurationService.getValue<string>(LeapfrogConfigurationKeys.ApiUrl);
+		return typeof configUrl === 'string' && configUrl.trim() ? configUrl.trim() : undefined;
 	}
 
 	async getTranscript(transcriptId: string): Promise<ILeapfrogTranscript> {
@@ -347,9 +324,43 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	}
 
 	async getStatus(transcriptId: string): Promise<ILeapfrogTranscript> {
-		const apiKey = await this.getApiKey();
-		const raw = await this.request<RawTranscript>('GET', `/transcript/${transcriptId}`, undefined, apiKey);
-		return this.mapRaw(raw);
+		const backendUrl = this.getBackendUrl();
+		const clerkToken = await this.secretStorageService.get(CLERK_TOKEN_STORAGE_KEY);
+		let projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
+		if (!projectId) {
+			const folders = this.workspaceContextService.getWorkspace().folders;
+			if (folders.length > 0) {
+				const projectConfig = new LeapfrogProjectConfig(this.fileService);
+				projectId = await projectConfig.getOrCreateProjectId(folders[0].uri.fsPath);
+			}
+		}
+		if (backendUrl && projectId && clerkToken) {
+			const res = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/${transcriptId}`, {
+				headers: { 'Authorization': `Bearer ${clerkToken}` },
+			});
+			if (!res.ok) {
+				throw new Error(`Failed to get transcript status: ${res.status}`);
+			}
+			const job = await res.json() as {
+				status: string;
+				transcript?: { text: string; segments: string; speakers: string; language: string; confidenceScore: number; durationSeconds: number };
+			};
+			if (job.status === 'completed' && job.transcript) {
+				return this.formatBackendTranscript(transcriptId, job.transcript);
+			}
+			return {
+				id: transcriptId,
+				fileId: generateUuid(),
+				projectId: projectId ?? '',
+				sourcePath: '',
+				status: job.status === 'error' ? 'error' : job.status === 'processing' ? 'processing' : 'pending',
+				segments: [],
+				speakers: [],
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+			};
+		}
+		throw new Error('Transcription requires a Leapfrog account. Run **Leapfrog: Connect to Leapfrog** to sign in and link your workspace.');
 	}
 
 	async renameSpeaker(transcriptId: string, speakerId: string, newName: string): Promise<void> {
@@ -365,178 +376,6 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	// -----------------------------------------------------------------------
 	// Internal helpers
 	// -----------------------------------------------------------------------
-
-	private async getApiKey(): Promise<string> {
-		// First check VS Code secret storage (user-provided key)
-		const key = await this.secretStorageService.get(API_KEY_STORAGE_KEY);
-		if (key) {
-			return key;
-		}
-
-		// Fallback to environment variable (guard against sandboxed renderer where process may be undefined)
-		const env = typeof process !== 'undefined' ? process.env : undefined;
-		const envKey = env?.['ASSEMBLYAI_API_KEY'];
-		if (envKey) {
-			return envKey;
-		}
-
-		throw new Error('AssemblyAI API key not configured. Please set ASSEMBLYAI_API_KEY environment variable or configure it in Leapfrog settings.');
-	}
-
-	private async request<T>(method: string, path: string, body?: Record<string, unknown>, apiKey?: string): Promise<T> {
-		const url = `${ASSEMBLYAI_BASE}${path}`;
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-		};
-
-		if (apiKey) {
-			headers['Authorization'] = apiKey;
-		}
-
-		const options: RequestInit = {
-			method,
-			headers,
-		};
-
-		if (body) {
-			options.body = JSON.stringify(body);
-		}
-
-		const res = await fetch(url, options);
-
-		if (!res.ok) {
-			const text = await res.text().catch(() => 'Unknown error');
-			throw new Error(`AssemblyAI API error ${res.status}: ${text}`);
-		}
-
-		return res.json() as Promise<T>;
-	}
-
-	private async pollUntilDone(transcriptId: string, apiKey: string): Promise<void> {
-		const start = Date.now();
-
-		while (Date.now() - start < POLLING_TIMEOUT_MS) {
-			await this.sleep(POLLING_INTERVAL_MS);
-
-			try {
-				const raw = await this.request<RawTranscript>('GET', `/transcript/${transcriptId}`, undefined, apiKey);
-				const transcript = this.mapRaw(raw);
-
-				if (transcript.status === 'completed') {
-					this._onDidTranscriptComplete.fire(transcript);
-					return;
-				}
-
-				if (transcript.status === 'error') {
-					this._onDidTranscriptError.fire({
-						transcriptId,
-						error: raw.error ?? 'Transcription failed',
-					});
-					return;
-				}
-			} catch (err) {
-				this.logService.error('[Leapfrog] Polling error for transcript', transcriptId, err);
-			}
-		}
-
-		this._onDidTranscriptError.fire({
-			transcriptId,
-			error: 'Transcription timed out',
-		});
-	}
-
-	private mapRaw(raw: RawTranscript): ILeapfrogTranscript {
-		const utterances = raw.utterances ?? [];
-		const sentimentResults = raw.sentiment_analysis_results ?? [];
-		const speakers = this.extractSpeakers(utterances, raw.id);
-		const segments = this.mapUtterances(utterances, sentimentResults);
-
-		return {
-			id: raw.id,
-			fileId: generateUuid(),
-			projectId: '',
-			sourcePath: raw.audio_url ?? '',
-			status: this.mapStatus(raw.status),
-			segments,
-			speakers,
-			duration: raw.audio_duration ?? undefined,
-			createdAt: Date.now(),
-			updatedAt: Date.now(),
-		};
-	}
-
-	private mapStatus(status: string): ILeapfrogTranscript['status'] {
-		switch (status) {
-			case 'queued': return 'pending';
-			case 'processing': return 'processing';
-			case 'completed': return 'completed';
-			case 'error': return 'error';
-			default: return 'pending';
-		}
-	}
-
-	private extractSpeakers(utterances: RawUtterance[], transcriptId: string): ILeapfrogSpeaker[] {
-		const ids = new Set<string>();
-		for (const u of utterances) {
-			if (u.speaker) {
-				ids.add(u.speaker);
-			}
-		}
-
-		const nameOverrides = this.speakerNames.get(transcriptId);
-
-		return Array.from(ids).sort().map((id, i) => ({
-			id,
-			name: nameOverrides?.get(id) ?? `Speaker ${i + 1}`,
-			color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
-		}));
-	}
-
-	private mapUtterances(utterances: RawUtterance[], sentimentResults: RawSentimentResult[]): ILeapfrogTranscriptSegment[] {
-		return utterances.map((u, i) => {
-			// Match sentiment by finding a result whose time range overlaps this utterance
-			const sentiment = this.matchSentiment(u.start, u.end, sentimentResults);
-
-			return {
-				id: `seg_${i}`,
-				speakerId: u.speaker ?? undefined,
-				text: u.text,
-				startTime: u.start / 1000,
-				endTime: u.end / 1000,
-				confidence: u.confidence ?? undefined,
-				sentiment: sentiment?.sentiment as ILeapfrogTranscriptSegment['sentiment'],
-				sentimentConfidence: sentiment?.confidence ?? undefined,
-				words: (u.words ?? []).map(this.mapWord),
-			};
-		});
-	}
-
-	private matchSentiment(startMs: number, endMs: number, results: RawSentimentResult[]): RawSentimentResult | undefined {
-		// Find the sentiment result that best overlaps with this utterance
-		let best: RawSentimentResult | undefined;
-		let bestOverlap = 0;
-
-		for (const r of results) {
-			const overlapStart = Math.max(startMs, r.start);
-			const overlapEnd = Math.min(endMs, r.end);
-			const overlap = overlapEnd - overlapStart;
-			if (overlap > bestOverlap) {
-				bestOverlap = overlap;
-				best = r;
-			}
-		}
-
-		return best;
-	}
-
-	private mapWord(w: RawWord): ILeapfrogTranscriptWord {
-		return {
-			text: w.text,
-			startTime: w.start / 1000,
-			endTime: w.end / 1000,
-			confidence: w.confidence ?? undefined,
-		};
-	}
 
 	private sleep(ms: number): Promise<void> {
 		return new Promise(resolve => setTimeout(resolve, ms));
@@ -598,45 +437,4 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 
 		return mapping[lang] ?? lang;
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Raw response shapes (internal)
-// ---------------------------------------------------------------------------
-
-interface RawTranscript {
-	id: string;
-	status: string;
-	audio_url?: string;
-	text?: string;
-	error?: string;
-	audio_duration?: number;
-	utterances?: RawUtterance[];
-	words?: RawWord[];
-	sentiment_analysis_results?: RawSentimentResult[];
-}
-
-interface RawSentimentResult {
-	text: string;
-	sentiment: string;
-	confidence: number;
-	start: number;
-	end: number;
-}
-
-interface RawUtterance {
-	speaker: string;
-	text: string;
-	start: number;
-	end: number;
-	confidence?: number;
-	words?: RawWord[];
-}
-
-interface RawWord {
-	text: string;
-	start: number;
-	end: number;
-	confidence?: number;
-	speaker?: string;
 }

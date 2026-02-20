@@ -65,6 +65,9 @@ import { LeapfrogSettingsEditor } from './leapfrogSettingsEditor.js';
 // Import dialogs
 import { TranscriptSettingsWizard } from './dialogs/transcriptSettingsWizard.js';
 
+// Import Connect URL handler (registers leapfrog://connect)
+import './leapfrogConnectUrlHandler.js';
+
 // Register icons
 const leapfrogTagsViewIcon = registerIcon('leapfrog-tags-view-icon', Codicon.tag, localize('leapfrogTagsViewIcon', 'View icon of the Leapfrog Tags view.'));
 const leapfrogChatViewIcon = registerIcon('leapfrog-chat-view-icon', Codicon.commentDiscussion, localize('leapfrogChatViewIcon', 'View icon of the Leapfrog Chat view.'));
@@ -385,14 +388,14 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	override async run(accessor: any): Promise<void> {
+	override async run(accessor: ServicesAccessor): Promise<void> {
 		const editorService = accessor.get(IEditorService);
 		const input = new LeapfrogSettingsEditorInput();
 		await editorService.openEditor(input);
 	}
 });
 
-// Register "Order Transcript" action – shows wizard then runs leapfrog.transcribe
+// Register "Order Transcript" action - shows wizard then runs leapfrog.transcribe
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
@@ -426,7 +429,7 @@ registerAction2(class extends Action2 {
 			return; // User cancelled
 		}
 
-		// Get file path – prefer the Explorer context URI, else let the command handle it
+		// Get file path - prefer the Explorer context URI, else let the command handle it
 		const filePath = uri?.fsPath;
 		if (!filePath) {
 			notificationService.warn(localize('leapfrogTranscriptNoFile', 'Please right-click an audio or video file to order a transcript.'));

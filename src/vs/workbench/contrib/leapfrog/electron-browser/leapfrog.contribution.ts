@@ -19,18 +19,17 @@ import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 
 import { IStatusbarService, IStatusbarEntryAccessor, StatusbarAlignment, IStatusbarEntry } from '../../../services/statusbar/browser/statusbar.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogTranscriptionOptions, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService } from '../common/leapfrog.js';
+import { IFileService, FileOperation } from '../../../../platform/files/common/files.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogTranscriptionOptions, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService, LEAPFROG_PREFERENCES_VIEWLET_ID } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { localize } from '../../../../nls.js';
-import { Severity } from '../../../../platform/notification/common/notification.js';
 import { LeapfrogTagService } from './leapfrogTagService.js';
 import { LeapfrogTranscriptionService } from './leapfrogTranscriptionService.js';
 import { LeapfrogChatHistoryService } from './leapfrogChatHistoryService.js';
@@ -41,7 +40,8 @@ import { LeapfrogIndexService } from './leapfrogIndexService.js';
 import { LeapfrogIndexPreferencesService } from './leapfrogIndexPreferencesService.js';
 import { LeapfrogSyncService } from './leapfrogSyncService.js';
 import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
-import { LEAPFROG_PREFERENCES_VIEWLET_ID } from '../common/leapfrog.js';
+import { LeapfrogConfigurationKeys } from '../common/leapfrogConfiguration.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -182,6 +182,60 @@ CommandsRegistry.registerCommand({
 			await apiKeyService.setApiKey(provider.value, key.trim());
 			notificationService.info(localize('leapfrogApiKeyStored', 'API key stored for {0}', provider.value === 'openai' ? 'OpenAI' : 'Anthropic'));
 		}
+	}
+});
+
+// ---------------------------------------------------------------------------
+// Connect to Leapfrog (auth flow for transcription, etc.)
+// ---------------------------------------------------------------------------
+
+function getBackendUrl(accessor: ServicesAccessor): string | undefined {
+	try {
+		const g = globalThis as { process?: { env?: Record<string, string> } };
+		if (g.process?.env) {
+			const envUrl = g.process.env['NEXT_PUBLIC_API_URL'] ?? g.process.env['LEAPFROG_API_URL'];
+			if (envUrl) {
+				return envUrl;
+			}
+		}
+	} catch {
+		// process not available in sandboxed renderer
+	}
+	const configService = accessor.get(IConfigurationService);
+	const configUrl = configService.getValue<string>(LeapfrogConfigurationKeys.ApiUrl);
+	return typeof configUrl === 'string' && configUrl.trim() ? configUrl.trim() : undefined;
+}
+
+CommandsRegistry.registerCommand({
+	id: 'leapfrog.connect',
+	metadata: {
+		description: localize('leapfrogConnect', 'Leapfrog: Connect to Leapfrog - Sign in to enable transcription and sync')
+	},
+	handler: async (accessor: ServicesAccessor) => {
+		const openerService = accessor.get(IOpenerService);
+		const workspaceContextService = accessor.get(IWorkspaceContextService);
+		const fileService = accessor.get(IFileService);
+		const notificationService = accessor.get(INotificationService);
+
+		const backendUrl = getBackendUrl(accessor);
+		if (!backendUrl) {
+			notificationService.error(localize('leapfrogConnectNoBackend', 'Leapfrog API URL not configured. Set leapfrog.api.url in settings or NEXT_PUBLIC_API_URL / LEAPFROG_API_URL.'));
+			return;
+		}
+
+		const folders = workspaceContextService.getWorkspace().folders;
+		if (folders.length === 0) {
+			notificationService.warn(localize('leapfrogConnectNoWorkspace', 'Open a workspace folder first, then run Connect to Leapfrog.'));
+			return;
+		}
+
+		const projectPath = folders[0].uri.fsPath;
+		const projectConfig = new LeapfrogProjectConfig(fileService);
+		const projectId = await projectConfig.getOrCreateProjectId(projectPath);
+
+		const connectUrl = `${backendUrl.replace(/\/$/, '')}/dashboard/connect-desktop?projectId=${encodeURIComponent(projectId)}`;
+		await openerService.open(URI.parse(connectUrl), { openExternal: true });
+		notificationService.info(localize('leapfrogConnectOpened', 'Browser opened. Sign in to Leapfrog, then return to the desktop.'));
 	}
 });
 
@@ -340,7 +394,7 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 
 	/**
 	 * Check merkle tree on every startup (runs after index completes).
-	 * Compares local vs remote; prompts to sync changed files to backend.
+	 * Compares local vs remote; automatically syncs changed files to backend.
 	 */
 	private async checkAndShowIndexToast(): Promise<void> {
 		const folders = this.workspaceContextService.getWorkspace().folders;
@@ -352,49 +406,47 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		const projectPath = folders[0].uri.fsPath;
 		const projectConfig = new LeapfrogProjectConfig(this.fileService);
 		const projectId = await projectConfig.getOrCreateProjectId(projectPath);
+		this.logService.info(`[Leapfrog] checkAndShowIndexToast: projectId=${projectId}`);
 
 		try {
 			const syncService = new LeapfrogSyncService(this.fileService, this.logService);
+			this.logService.info('[Leapfrog] Ensuring project exists on backend');
 			await syncService.ensureProject(projectId, projectPath.split(/[/\\]/).pop() ?? 'Workspace');
+
+			this.logService.info('[Leapfrog] Fetching remote merkle tree');
 			const remote = await syncService.fetchRemoteMerkleTree(projectId);
+
 			const indexSvc = this.indexService as LeapfrogIndexService;
 			const localTree = await indexSvc.getMerkleTreeForSync();
 			if (!localTree) {
-				this.logService.info('[Leapfrog] Index toast: no local merkle tree (no indexed files yet)');
+				this.logService.info('[Leapfrog] No local merkle tree (no indexed files yet)');
 				return;
 			}
 
 			const merkleTree = indexSvc.getMerkleTreeService();
 			const changed = merkleTree.compareTrees(localTree, remote);
+			this.logService.info(`[Leapfrog] Merkle tree comparison: ${changed.length} changed files`);
+
 			if (changed.length === 0) {
-				this.logService.info('[Leapfrog] Index toast: no changes (local matches remote)');
+				this.logService.info('[Leapfrog] No changes (local matches remote)');
 				return;
 			}
 
-			this.logService.info('[Leapfrog] Index toast: showing prompt for', changed.length, 'changed files');
-			const msg = localize('leapfrogIndexToast', "Index {0} changed files?", String(changed.length));
-			this.notificationService.prompt(
-				Severity.Info,
-				msg,
-				[
-					{
-						label: localize('leapfrogIndexNow', 'Index Now'),
-						run: async () => {
-							try {
-								await this.indexService.indexWorkspace();
-								const result = await this.indexService.syncToBackend(projectId);
-								if (result) {
-									this.notificationService.info(localize('leapfrogSyncComplete', 'Synced {0} files to cloud index.', String(result.changedCount)));
-								}
-							} catch (err) {
-								const msg = LeapfrogSyncService.getSyncErrorMessage(err);
-								this.notificationService.error(localize('leapfrogSyncFailed', 'Failed to sync: {0}', msg));
-							}
-						},
-					},
-				],
-				{ sticky: false },
-			);
+			// Automatically trigger sync without waiting for user input
+			this.logService.info(`[Leapfrog] Auto-syncing ${changed.length} changed files to backend`);
+			this.notificationService.info(localize('leapfrogSyncing', 'Syncing {0} files to cloud index...', String(changed.length)));
+
+			try {
+				const result = await this.indexService.syncToBackend(projectId);
+				if (result) {
+					this.logService.info(`[Leapfrog] Sync complete: ${result.changedCount} files synced`);
+					this.notificationService.info(localize('leapfrogSyncComplete', 'Synced {0} files to cloud index.', String(result.changedCount)));
+				}
+			} catch (err) {
+				const msg = LeapfrogSyncService.getSyncErrorMessage(err);
+				this.logService.error(`[Leapfrog] Sync failed: ${msg}`, err);
+				this.notificationService.error(localize('leapfrogSyncFailed', 'Failed to sync: {0}', msg));
+			}
 		} catch (err) {
 			this.logService.warn('[Leapfrog] Index toast check failed:', err);
 		}

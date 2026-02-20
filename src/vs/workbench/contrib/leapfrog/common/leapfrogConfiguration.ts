@@ -29,6 +29,7 @@ export const enum LeapfrogConfigurationKeys {
 	IndexIncludePatterns = 'leapfrog.index.includePatterns',
 	IndexExcludePatterns = 'leapfrog.index.excludePatterns',
 	IndexAutoIndex = 'leapfrog.index.autoIndex',
+	ApiUrl = 'leapfrog.api.url',
 }
 
 export interface ILeapfrogConfiguration {
@@ -63,6 +64,9 @@ export interface ILeapfrogConfiguration {
 		includePatterns: string[];
 		excludePatterns: string[];
 		autoIndex: boolean;
+	};
+	api?: {
+		url?: string;
 	};
 }
 
@@ -257,6 +261,12 @@ export const leapfrogConfigurationSchema: IConfigurationNode = {
 			default: true,
 			description: nls.localize('leapfrog.index.autoIndex', "Automatically index new or modified files"),
 			scope: ConfigurationScope.RESOURCE,
+		},
+		[LeapfrogConfigurationKeys.ApiUrl]: {
+			type: 'string',
+			default: '',
+			description: nls.localize('leapfrog.api.url', "Leapfrog web app URL for transcription and sync (e.g. https://leapfrogapp.com or http://localhost:3000). Falls back to NEXT_PUBLIC_API_URL env var if empty."),
+			scope: ConfigurationScope.APPLICATION,
 		},
 	}
 };
