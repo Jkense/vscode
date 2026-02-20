@@ -32,9 +32,7 @@ import { ILeapfrogConfiguration, LeapfrogConfigurationKeys } from '../common/lea
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
-
-const CLERK_TOKEN_STORAGE_KEY = 'leapfrog.auth.clerkToken';
-const PROJECT_ID_STORAGE_KEY = 'leapfrog.project.id';
+import { LEAPFROG_CLERK_TOKEN_KEY, LEAPFROG_PROJECT_ID_KEY } from '../common/leapfrogAuthKeys.js';
 const BACKEND_POLLING_INTERVAL_MS = 5000;
 const POLLING_TIMEOUT_MS = 600_000; // 10 minutes
 
@@ -75,8 +73,8 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 
 	async transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
 		const backendUrl = this.getBackendUrl();
-		let projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
-		const clerkToken = await this.secretStorageService.get(CLERK_TOKEN_STORAGE_KEY);
+		let projectId = await this.secretStorageService.get(LEAPFROG_PROJECT_ID_KEY);
+		const clerkToken = await this.secretStorageService.get(LEAPFROG_CLERK_TOKEN_KEY);
 
 		// Use LeapfrogProjectConfig for projectId when secret storage is empty
 		if (!projectId) {
@@ -325,8 +323,8 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 
 	async getStatus(transcriptId: string): Promise<ILeapfrogTranscript> {
 		const backendUrl = this.getBackendUrl();
-		const clerkToken = await this.secretStorageService.get(CLERK_TOKEN_STORAGE_KEY);
-		let projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
+		const clerkToken = await this.secretStorageService.get(LEAPFROG_CLERK_TOKEN_KEY);
+		let projectId = await this.secretStorageService.get(LEAPFROG_PROJECT_ID_KEY);
 		if (!projectId) {
 			const folders = this.workspaceContextService.getWorkspace().folders;
 			if (folders.length > 0) {

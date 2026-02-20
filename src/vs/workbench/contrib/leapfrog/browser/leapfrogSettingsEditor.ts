@@ -12,10 +12,13 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IConfigurationService, ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import { $, append, clearNode } from '../../../../base/browser/dom.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 import { ILeapfrogIndexPreferencesService, ILeapfrogIndexService, IIndexableFile, LeapfrogIndexStatus } from '../common/leapfrog.js';
 import { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { LEAPFROG_USER_EMAIL_KEY, LEAPFROG_USER_IMAGE_URL_KEY, LEAPFROG_USER_NAME_KEY } from '../common/leapfrogAuthKeys.js';
 import { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../base/common/codicons.js';
@@ -54,7 +57,7 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		group: IEditorGroup,
 		@ITelemetryService telemetryService: ITelemetryService,
 		@IThemeService themeService: IThemeService,
-		@IStorageService storageService: IStorageService,
+		@IStorageService private readonly storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
@@ -81,6 +84,9 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		if (this.indexService) {
 			this._register(this.indexService.onDidChangeIndexProgress(() => this.refresh()));
 		}
+		const store = new DisposableStore();
+		this._register(store);
+		store.add(this.storageService.onDidChangeValue(StorageScope.PROFILE, LEAPFROG_USER_EMAIL_KEY, store)(() => { if (this.container) { this.render(); } }, undefined, store));
 	}
 
 	override async setInput(input: LeapfrogSettingsEditorInput, options: IEditorOptions | undefined, context: IEditorOpenContext, token: CancellationToken): Promise<void> {
@@ -101,7 +107,7 @@ export class LeapfrogSettingsEditor extends EditorPane {
 
 	private stopDotsAnimation(): void {
 		if (this.dotsInterval) {
-			clearInterval(this.dotsInterval);
+			mainWindow.clearInterval(this.dotsInterval);
 			this.dotsInterval = undefined;
 		}
 	}
@@ -114,7 +120,7 @@ export class LeapfrogSettingsEditor extends EditorPane {
 			spanEl.textContent = '.'.repeat(this.dotsCount);
 		};
 		update();
-		this.dotsInterval = setInterval(update, 400);
+		this.dotsInterval = mainWindow.setInterval(update, 400);
 	}
 
 	private async refresh(): Promise<void> {
@@ -152,12 +158,32 @@ export class LeapfrogSettingsEditor extends EditorPane {
 	}
 
 	private renderSidebar(sidebar: HTMLElement): void {
-		// User profile section
+		const email = this.storageService.get(LEAPFROG_USER_EMAIL_KEY, StorageScope.PROFILE, '');
+		const imageUrl = this.storageService.get(LEAPFROG_USER_IMAGE_URL_KEY, StorageScope.PROFILE, '');
+		const name = this.storageService.get(LEAPFROG_USER_NAME_KEY, StorageScope.PROFILE, '');
+		const isConnected = !!email;
+
 		const profileSection = append(sidebar, $('div.leapfrog-settings-profile'));
 		const avatar = append(profileSection, $('div.leapfrog-settings-avatar'));
-		avatar.textContent = 'J';
-		append(profileSection, $('div', { className: 'leapfrog-settings-email' }, 'user@example.com'));
-		append(profileSection, $('div', { className: 'leapfrog-settings-plan' }, nls.localize('leapfrogSettingsProPlan', 'Pro Plan')));
+		if (imageUrl) {
+			const img = document.createElement('img');
+			img.src = imageUrl;
+			img.alt = name || email || 'Avatar';
+			img.className = 'leapfrog-settings-avatar-img';
+			avatar.appendChild(img);
+		} else {
+			const initial = (name || email || '?').charAt(0).toUpperCase();
+			avatar.textContent = initial;
+		}
+		append(profileSection, $('div', { className: 'leapfrog-settings-email' }, isConnected ? email : nls.localize('leapfrogSettingsNotConnected', 'Not connected')));
+		if (isConnected) {
+			append(profileSection, $('div', { className: 'leapfrog-settings-plan' }, nls.localize('leapfrogSettingsProPlan', 'Pro Plan')));
+			const disconnectBtn = append(profileSection, $('button.leapfrog-settings-connect-btn', {}, nls.localize('leapfrogSettingsDisconnect', 'Disconnect')));
+			disconnectBtn.onclick = () => this.commandService.executeCommand('leapfrog.disconnect');
+		} else {
+			const connectBtn = append(profileSection, $('button.leapfrog-settings-connect-btn.primary', {}, nls.localize('leapfrogSettingsConnect', 'Connect to Leapfrog')));
+			connectBtn.onclick = () => this.commandService.executeCommand('leapfrog.connect');
+		}
 
 		// Search bar
 		const searchContainer = append(sidebar, $('div.leapfrog-settings-search-container'));

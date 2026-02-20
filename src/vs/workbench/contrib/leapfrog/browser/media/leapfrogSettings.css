@@ -10,8 +10,6 @@
 	height: 100%;
 	background-color: var(--vscode-editor-background);
 	color: var(--vscode-editor-foreground);
-	font-family: var(--vscode-editor-font-family);
-	font-size: var(--vscode-editor-font-size);
 }
 
 /* Two-column layout: sidebar + main */
@@ -56,6 +54,38 @@
 	justify-content: center;
 	font-size: 16px;
 	font-weight: 600;
+	overflow: hidden;
+}
+
+.leapfrog-settings-avatar-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.leapfrog-settings-connect-btn {
+	margin-top: 4px;
+	padding: 6px 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	cursor: pointer;
+	border: 1px solid var(--vscode-input-border);
+	background-color: transparent;
+	color: var(--vscode-button-foreground);
+}
+
+.leapfrog-settings-connect-btn:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.leapfrog-settings-connect-btn.primary {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-color: var(--vscode-button-border);
+}
+
+.leapfrog-settings-connect-btn.primary:hover {
+	background-color: var(--vscode-button-hoverBackground);
 }
 
 .leapfrog-settings-email {

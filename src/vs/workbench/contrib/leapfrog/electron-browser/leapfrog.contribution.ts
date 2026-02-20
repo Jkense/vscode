@@ -42,6 +42,8 @@ import { LeapfrogSyncService } from './leapfrogSyncService.js';
 import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
 import { LeapfrogConfigurationKeys } from '../common/leapfrogConfiguration.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { LEAPFROG_CLERK_TOKEN_KEY, LEAPFROG_PROJECT_ID_KEY, LEAPFROG_USER_EMAIL_KEY, LEAPFROG_USER_IMAGE_URL_KEY, LEAPFROG_USER_NAME_KEY } from '../common/leapfrogAuthKeys.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -236,6 +238,29 @@ CommandsRegistry.registerCommand({
 		const connectUrl = `${backendUrl.replace(/\/$/, '')}/dashboard/connect-desktop?projectId=${encodeURIComponent(projectId)}`;
 		await openerService.open(URI.parse(connectUrl), { openExternal: true });
 		notificationService.info(localize('leapfrogConnectOpened', 'Browser opened. Sign in to Leapfrog, then return to the desktop.'));
+	}
+});
+
+CommandsRegistry.registerCommand({
+	id: 'leapfrog.disconnect',
+	metadata: {
+		description: localize('leapfrogDisconnect', 'Leapfrog: Disconnect from Leapfrog')
+	},
+	handler: async (accessor: ServicesAccessor) => {
+		const secretStorageService = accessor.get(ISecretStorageService);
+		const storageService = accessor.get(IStorageService);
+		const notificationService = accessor.get(INotificationService);
+
+		try {
+			await secretStorageService.delete(LEAPFROG_CLERK_TOKEN_KEY);
+			await secretStorageService.delete(LEAPFROG_PROJECT_ID_KEY);
+			storageService.remove(LEAPFROG_USER_EMAIL_KEY, StorageScope.PROFILE);
+			storageService.remove(LEAPFROG_USER_IMAGE_URL_KEY, StorageScope.PROFILE);
+			storageService.remove(LEAPFROG_USER_NAME_KEY, StorageScope.PROFILE);
+			notificationService.info(localize('leapfrogDisconnectSuccess', 'Disconnected from Leapfrog.'));
+		} catch (err) {
+			notificationService.error(localize('leapfrogDisconnectFailed', 'Failed to disconnect: {0}', String(err)));
+		}
 	}
 });
 
