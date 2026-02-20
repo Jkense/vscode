@@ -29,10 +29,14 @@ import {
 	ILeapfrogTranscriptWord,
 	ILeapfrogSpeaker,
 } from '../common/leapfrog.js';
+import { ILeapfrogConfiguration } from '../common/leapfrogConfiguration.js';
 
 const ASSEMBLYAI_BASE = 'https://api.assemblyai.com/v2';
 const API_KEY_STORAGE_KEY = 'leapfrog.apiKey.assemblyai';
+const CLERK_TOKEN_STORAGE_KEY = 'leapfrog.auth.clerkToken';
+const PROJECT_ID_STORAGE_KEY = 'leapfrog.project.id';
 const POLLING_INTERVAL_MS = 3000;
+const BACKEND_POLLING_INTERVAL_MS = 5000;
 const POLLING_TIMEOUT_MS = 600_000; // 10 minutes
 
 /** Default speaker colours for UI highlighting */
@@ -69,6 +73,230 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	// -----------------------------------------------------------------------
 
 	async transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
+		// Try backend-orchestrated flow first if configured
+		const backendUrl = this.getBackendUrl();
+		const projectId = await this.secretStorageService.get(PROJECT_ID_STORAGE_KEY);
+		const clerkToken = await this.secretStorageService.get(CLERK_TOKEN_STORAGE_KEY);
+
+		if (backendUrl && projectId && clerkToken) {
+			try {
+				return await this.transcribeViaBackend(filePath, options, backendUrl, projectId, clerkToken);
+			} catch (err) {
+				this.logService.warn('[Leapfrog] Backend transcription failed, falling back to direct flow:', err);
+			}
+		}
+
+		// Fallback: direct AssemblyAI flow
+		return this.transcribeDirectly(filePath, options);
+	}
+
+	private async transcribeViaBackend(
+		filePath: string,
+		options: ILeapfrogTranscriptionOptions | undefined,
+		backendUrl: string,
+		projectId: string,
+		clerkToken: string,
+	): Promise<ILeapfrogTranscript> {
+		const mergedOptions = this.mergeWithConfigurationDefaults(options);
+
+		// 1. Initiate transcription on backend → get upload URL
+		const initiateRes = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/initiate`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${clerkToken}`,
+			},
+			body: JSON.stringify({
+				filePath,
+				language: mergedOptions.language ?? 'auto',
+				options: {
+					speaker_labels: true,
+					punctuate: mergedOptions.punctuate,
+					format_text: mergedOptions.formatText,
+					sentiment_analysis: mergedOptions.sentimentAnalysis,
+					entity_detection: mergedOptions.entityDetection,
+					filter_profanity: mergedOptions.filterProfanity,
+				},
+			}),
+		});
+
+		if (!initiateRes.ok) {
+			const text = await initiateRes.text().catch(() => '');
+			throw new Error(`Backend initiate failed ${initiateRes.status}: ${text}`);
+		}
+
+		const { jobId, assemblyaiUploadEndpoint, assemblyaiToken } = await initiateRes.json() as {
+			jobId: string;
+			assemblyaiUploadEndpoint: string;
+			assemblyaiToken: string;
+		};
+
+		this.logService.info('[Leapfrog] Backend transcription initiated, jobId:', jobId);
+
+		// 2. Upload audio file DIRECTLY to AssemblyAI (zero touch on our servers)
+		const audioUrl = await this.uploadAudioToAssemblyAI(filePath, assemblyaiUploadEndpoint, assemblyaiToken);
+
+		// 3. Register the audio URL with the backend to trigger processing
+		const submitRes = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/${jobId}/submit`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${clerkToken}`,
+			},
+			body: JSON.stringify({ audioUrl }),
+		});
+
+		if (!submitRes.ok) {
+			throw new Error(`Backend submit failed ${submitRes.status}`);
+		}
+
+		this.logService.info('[Leapfrog] Audio uploaded to AssemblyAI for jobId:', jobId);
+
+		// Return a pending transcript and start background polling
+		const pendingTranscript: ILeapfrogTranscript = {
+			id: jobId,
+			fileId: generateUuid(),
+			projectId,
+			sourcePath: filePath,
+			status: 'pending',
+			segments: [],
+			speakers: [],
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+		};
+
+		// Poll backend for completion
+		this.pollBackendUntilDone(backendUrl, projectId, jobId, clerkToken);
+
+		return pendingTranscript;
+	}
+
+	private async uploadAudioToAssemblyAI(filePath: string, uploadEndpoint: string, apiKey: string): Promise<string> {
+		// Read the file from disk via Node.js fs
+		const fs = await import('fs').catch(() => null);
+		if (!fs) { throw new Error('Cannot read audio file: Node.js fs unavailable'); }
+		const audioData = fs.readFileSync(filePath);
+
+		// POST file to AssemblyAI upload endpoint → returns { upload_url }
+		const uploadRes = await fetch(uploadEndpoint, {
+			method: 'POST',
+			headers: {
+				'Authorization': apiKey,
+				'Content-Type': 'application/octet-stream',
+				'Transfer-Encoding': 'chunked',
+			},
+			body: audioData,
+		});
+
+		if (!uploadRes.ok) {
+			const text = await uploadRes.text().catch(() => '');
+			throw new Error(`AssemblyAI upload failed ${uploadRes.status}: ${text}`);
+		}
+
+		const { upload_url } = await uploadRes.json() as { upload_url: string };
+		return upload_url;
+	}
+
+	private async pollBackendUntilDone(backendUrl: string, projectId: string, jobId: string, clerkToken: string): Promise<void> {
+		const start = Date.now();
+
+		while (Date.now() - start < POLLING_TIMEOUT_MS) {
+			await this.sleep(BACKEND_POLLING_INTERVAL_MS);
+
+			try {
+				const res = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/${jobId}`, {
+					headers: { 'Authorization': `Bearer ${clerkToken}` },
+				});
+
+				if (!res.ok) { continue; }
+
+				const job = await res.json() as {
+					status: string;
+					errorMessage?: string;
+					transcript?: {
+						text: string;
+						segments: string;
+						speakers: string;
+						language: string;
+						confidenceScore: number;
+						durationSeconds: number;
+					};
+				};
+
+				if (job.status === 'completed' && job.transcript) {
+					const transcript = this.formatBackendTranscript(jobId, job.transcript);
+					this._onDidTranscriptComplete.fire(transcript);
+					return;
+				}
+
+				if (job.status === 'error') {
+					this._onDidTranscriptError.fire({ transcriptId: jobId, error: job.errorMessage ?? 'Transcription failed' });
+					return;
+				}
+			} catch (err) {
+				this.logService.error('[Leapfrog] Backend polling error for job', jobId, err);
+			}
+		}
+
+		this._onDidTranscriptError.fire({ transcriptId: jobId, error: 'Transcription timed out' });
+	}
+
+	private formatBackendTranscript(jobId: string, data: {
+		text: string;
+		segments: string;
+		speakers: string;
+		language: string;
+		confidenceScore: number;
+		durationSeconds: number;
+	}): ILeapfrogTranscript {
+		const rawSegments = JSON.parse(data.segments) as Array<{
+			speaker: string; text: string; startTime: number; endTime: number; confidence: number;
+		}>;
+		const rawSpeakers = JSON.parse(data.speakers) as Array<{ id: string; name: string }>;
+
+		const segments: ILeapfrogTranscriptSegment[] = rawSegments.map((s, i) => ({
+			id: `seg_${i}`,
+			speakerId: s.speaker,
+			text: s.text,
+			startTime: s.startTime,
+			endTime: s.endTime,
+			confidence: s.confidence,
+			words: [],
+		}));
+
+		const speakers: ILeapfrogSpeaker[] = rawSpeakers.map((s, i) => ({
+			id: s.id,
+			name: s.name,
+			color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
+		}));
+
+		return {
+			id: jobId,
+			fileId: generateUuid(),
+			projectId: '',
+			sourcePath: '',
+			status: 'completed',
+			segments,
+			speakers,
+			duration: data.durationSeconds,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+		};
+	}
+
+	private getBackendUrl(): string | undefined {
+		try {
+			const g = globalThis as { process?: { env?: Record<string, string> } };
+			if (g.process?.env) {
+				return g.process.env['NEXT_PUBLIC_API_URL'] ?? g.process.env['LEAPFROG_API_URL'];
+			}
+		} catch {
+			// process not available in sandboxed renderer
+		}
+		return undefined;
+	}
+
+	private async transcribeDirectly(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
 		const apiKey = await this.getApiKey();
 
 		// Merge provided options with configuration defaults
@@ -97,7 +325,7 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		const response = await this.request<RawTranscript>('POST', '/transcript', body, apiKey);
 
 		const transcript = this.mapRaw(response);
-		this.logService.info('[Leapfrog] Transcription submitted:', transcript.id, 'with options:', mergedOptions);
+		this.logService.info('[Leapfrog] Transcription submitted directly:', transcript.id, 'with options:', mergedOptions);
 
 		// Start background polling
 		this.pollUntilDone(transcript.id, apiKey);
@@ -310,7 +538,7 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	 * Configuration settings act as defaults; provided options override them.
 	 */
 	private mergeWithConfigurationDefaults(provided?: ILeapfrogTranscriptionOptions): ILeapfrogTranscriptionOptions {
-		const config = this.configurationService.getValue('leapfrog') as any;
+		const config = this.configurationService.getValue('leapfrog') as ILeapfrogConfiguration;
 		const transcript = config?.transcript ?? {};
 
 		return {
