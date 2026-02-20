@@ -678,19 +678,28 @@ export class LeapfrogTagsView extends ViewPane {
 
 		const colorItems = [
 			...defaultColors.map((color, i) => {
-				// Create colored circle SVG as data URI
+				// Create colored circle SVG as base64 data URI
 				const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
-				const encoded = encodeURIComponent(svg);
-				const iconPath = URI.from({
-					scheme: "data",
-					path: `image/svg+xml,${encoded}`,
-				});
-				return {
-					label: `Color ${i + 1}`,
-					description: color,
-					iconPath,
-					color,
-				};
+				try {
+					const encoded = btoa(unescape(encodeURIComponent(svg)));
+					const iconPath = URI.from({
+						scheme: "data",
+						path: `image/svg+xml;base64,${encoded}`,
+					});
+					return {
+						label: `Color ${i + 1}`,
+						description: color,
+						iconPath,
+						color,
+					};
+				} catch {
+					// Fallback if encoding fails
+					return {
+						label: `$(circle-filled) Color ${i + 1}`,
+						description: color,
+						color,
+					};
+				}
 			}),
 			{
 				label: "$(edit) Custom color...",
