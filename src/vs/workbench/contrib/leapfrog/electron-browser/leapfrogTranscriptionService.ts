@@ -99,7 +99,9 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	): Promise<ILeapfrogTranscript> {
 		const mergedOptions = this.mergeWithConfigurationDefaults(options);
 
-		// 1. Initiate transcription on backend → get upload URL
+		this.logService.info(`[Leapfrog] Transcription: initiating via backend backendUrl=${backendUrl} projectId=${projectId} file=${filePath}`);
+
+		// 1. Initiate transcription on backend → get AssemblyAI upload endpoint + token
 		const initiateRes = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/initiate`, {
 			method: 'POST',
 			headers: {
@@ -121,8 +123,10 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		});
 
 		if (!initiateRes.ok) {
-			const text = await initiateRes.text().catch(() => '');
-			throw new Error(`Backend initiate failed ${initiateRes.status}: ${text}`);
+			const body = await initiateRes.json().catch(() => ({ error: initiateRes.statusText })) as { error?: string };
+			const reason = body?.error ?? initiateRes.statusText;
+			this.logService.error(`[Leapfrog] Transcription initiate failed (${initiateRes.status}): ${reason}`);
+			throw new Error(`Could not start transcription: ${reason}`);
 		}
 
 		const { jobId, assemblyaiUploadEndpoint, assemblyaiToken } = await initiateRes.json() as {
@@ -131,12 +135,14 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 			assemblyaiToken: string;
 		};
 
-		this.logService.info('[Leapfrog] Backend transcription initiated, jobId:', jobId);
+		this.logService.info(`[Leapfrog] Transcription job created jobId=${jobId}, uploading audio to AssemblyAI...`);
 
-		// 2. Upload audio file DIRECTLY to AssemblyAI (zero touch on our servers)
+		// 2. Upload audio file DIRECTLY to AssemblyAI (audio never touches our servers)
 		const audioUrl = await this.uploadAudioToAssemblyAI(filePath, assemblyaiUploadEndpoint, assemblyaiToken);
+		this.logService.info(`[Leapfrog] Audio uploaded to AssemblyAI audioUrl=${audioUrl}`);
 
 		// 3. Register the audio URL with the backend to trigger processing
+		this.logService.info(`[Leapfrog] Submitting audioUrl to backend for jobId=${jobId}`);
 		const submitRes = await fetch(`${backendUrl}/api/projects/${projectId}/transcriptions/${jobId}/submit`, {
 			method: 'POST',
 			headers: {
@@ -147,10 +153,13 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 		});
 
 		if (!submitRes.ok) {
-			throw new Error(`Backend submit failed ${submitRes.status}`);
+			const body = await submitRes.json().catch(() => ({ error: submitRes.statusText })) as { error?: string };
+			const reason = body?.error ?? submitRes.statusText;
+			this.logService.error(`[Leapfrog] Transcription submit failed (${submitRes.status}): ${reason}`);
+			throw new Error(`Could not submit transcription job: ${reason}`);
 		}
 
-		this.logService.info('[Leapfrog] Audio uploaded to AssemblyAI for jobId:', jobId);
+		this.logService.info(`[Leapfrog] Transcription job ${jobId} submitted, polling for completion...`);
 
 		// Return a pending transcript and start background polling
 		const pendingTranscript: ILeapfrogTranscript = {
