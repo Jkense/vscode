@@ -14,8 +14,9 @@
  */
 
 import { URI } from '../../../../base/common/uri.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
+import { IStatusbarService, IStatusbarEntryAccessor, StatusbarAlignment, IStatusbarEntry } from '../../../services/statusbar/browser/statusbar.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -40,6 +41,7 @@ import { LeapfrogIndexService } from './leapfrogIndexService.js';
 import { LeapfrogIndexPreferencesService } from './leapfrogIndexPreferencesService.js';
 import { LeapfrogSyncService } from './leapfrogSyncService.js';
 import { LeapfrogProjectConfig } from './leapfrogProjectConfig.js';
+import { LEAPFROG_PREFERENCES_VIEWLET_ID } from '../common/leapfrog.js';
 
 /**
  * Leapfrog API Key Service - Desktop implementation using native secret storage
@@ -125,6 +127,23 @@ CommandsRegistry.registerCommand('leapfrog.indexWorkspace', async (accessor: Ser
 });
 
 CommandsRegistry.registerCommand({
+	id: 'leapfrog.resetIndex',
+	metadata: {
+		description: localize('leapfrogResetIndex', 'Leapfrog: Reset index and merkle tree. Forces full re-index.')
+	},
+	handler: async (accessor: ServicesAccessor) => {
+		const indexService = accessor.get(ILeapfrogIndexService);
+		const notificationService = accessor.get(INotificationService);
+		try {
+			await indexService.resetIndex();
+			notificationService.info(localize('leapfrogResetIndexComplete', 'Index reset. Re-indexing workspace...'));
+		} catch (err) {
+			notificationService.error(localize('leapfrogResetIndexFailed', 'Failed to reset index: {0}', String(err)));
+		}
+	}
+});
+
+CommandsRegistry.registerCommand({
 	id: 'leapfrog.configureApiKey',
 	metadata: {
 		description: localize('leapfrogConfigureApiKey', 'Leapfrog: Configure API Key')
@@ -169,17 +188,22 @@ CommandsRegistry.registerCommand({
 /**
  * Contribution that initializes Leapfrog desktop services
  */
+const INDEXING_STATUS_BAR_ID = 'leapfrog.indexing';
+const INDEXING_BUSY_STATUSES = ['scanning', 'chunking', 'embedding'] as const;
+
 class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContribution {
 
 	static readonly ID = 'workbench.contrib.leapfrogDesktop';
 
 	private indexDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly indexingStatusBarEntry = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@IFileService private readonly fileService: IFileService,
+		@IStatusbarService private readonly statusbarService: IStatusbarService,
 		@ILeapfrogTagService private readonly tagService: ILeapfrogTagService,
 		@ILeapfrogChatHistoryService private readonly chatHistoryService: ILeapfrogChatHistoryService,
 		@ILeapfrogIndexService private readonly indexService: ILeapfrogIndexService,
@@ -190,7 +214,13 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		this.initializeTagDatabase();
 		this.initializeChatDatabase();
 		this.initializeIndexService();
-		this._register(this.indexService.onDidIndexComplete(() => this.checkAndShowIndexToast()));
+		this._register(this.indexService.onDidChangeIndexProgress(p => this.updateIndexingStatusBar(p)));
+		this._register(this.indexService.onDidIndexComplete(() => {
+			this.hideIndexingStatusBar();
+			this.checkAndShowIndexToast();
+		}));
+		// Show status bar if indexing already in progress (e.g. from auto-index on startup)
+		this.updateIndexingStatusBar(this.indexService.getProgress());
 
 		// Duplicate tag applications when files are copied
 		this._register(this.workingCopyFileService.onDidRunWorkingCopyFileOperation(e => {
@@ -262,26 +292,86 @@ class LeapfrogDesktopContribution extends Disposable implements IWorkbenchContri
 		}
 	}
 
+	private updateIndexingStatusBar(progress: { status: string; processedFiles?: number; totalFiles?: number; currentFile?: string }): void {
+		const isBusy = INDEXING_BUSY_STATUSES.includes(progress.status as typeof INDEXING_BUSY_STATUSES[number]);
+		if (!isBusy) {
+			this.hideIndexingStatusBar();
+			return;
+		}
+		// Show notification toast when indexing starts (first busy status)
+		if (!this.indexingStatusBarEntry.value) {
+			this.notificationService.info(localize('leapfrogIndexingStarted', 'Indexing workspace...'));
+		}
+		const statusLabel = progress.status === 'scanning' ? 'Scanning' : progress.status === 'chunking' ? 'Chunking' : 'Embedding';
+		const detail = progress.totalFiles
+			? ` ${progress.processedFiles ?? 0}/${progress.totalFiles} files`
+			: progress.currentFile
+				? ` ${(progress.currentFile.split(/[/\\]/).pop() ?? '')}`
+				: '';
+		const text = `$(sync~spin) ${statusLabel}${detail}`;
+		const tooltip = localize('leapfrogIndexingStatus', 'Leapfrog: Indexing workspace{0}', detail || '...');
+		const entry: IStatusbarEntry = {
+			name: localize('leapfrogIndexing', 'Leapfrog Indexing'),
+			text,
+			ariaLabel: tooltip,
+			tooltip,
+			showProgress: 'loading',
+			command: LEAPFROG_PREFERENCES_VIEWLET_ID,
+		};
+		try {
+			if (!this.indexingStatusBarEntry.value) {
+				this.indexingStatusBarEntry.value = this.statusbarService.addEntry(
+					entry,
+					INDEXING_STATUS_BAR_ID,
+					StatusbarAlignment.LEFT,
+					100
+				);
+			} else {
+				this.indexingStatusBarEntry.value.update(entry);
+			}
+		} catch (err) {
+			this.logService.warn('[Leapfrog] Failed to update indexing status bar:', err);
+		}
+	}
+
+	private hideIndexingStatusBar(): void {
+		this.indexingStatusBarEntry.clear();
+	}
+
+	/**
+	 * Check merkle tree on every startup (runs after index completes).
+	 * Compares local vs remote; prompts to sync changed files to backend.
+	 */
 	private async checkAndShowIndexToast(): Promise<void> {
 		const folders = this.workspaceContextService.getWorkspace().folders;
-		if (folders.length === 0) return;
+		if (folders.length === 0) {
+			this.logService.info('[Leapfrog] Index toast: no workspace folders');
+			return;
+		}
 
 		const projectPath = folders[0].uri.fsPath;
 		const projectConfig = new LeapfrogProjectConfig(this.fileService);
-		const projectId = await projectConfig.getProjectId(projectPath);
-		if (!projectId) return;
+		const projectId = await projectConfig.getOrCreateProjectId(projectPath);
 
 		try {
 			const syncService = new LeapfrogSyncService(this.fileService, this.logService);
+			await syncService.ensureProject(projectId, projectPath.split(/[/\\]/).pop() ?? 'Workspace');
 			const remote = await syncService.fetchRemoteMerkleTree(projectId);
 			const indexSvc = this.indexService as LeapfrogIndexService;
 			const localTree = await indexSvc.getMerkleTreeForSync();
-			if (!localTree) return;
+			if (!localTree) {
+				this.logService.info('[Leapfrog] Index toast: no local merkle tree (no indexed files yet)');
+				return;
+			}
 
 			const merkleTree = indexSvc.getMerkleTreeService();
 			const changed = merkleTree.compareTrees(localTree, remote);
-			if (changed.length === 0) return;
+			if (changed.length === 0) {
+				this.logService.info('[Leapfrog] Index toast: no changes (local matches remote)');
+				return;
+			}
 
+			this.logService.info('[Leapfrog] Index toast: showing prompt for', changed.length, 'changed files');
 			const msg = localize('leapfrogIndexToast', "Index {0} changed files?", String(changed.length));
 			this.notificationService.prompt(
 				Severity.Info,

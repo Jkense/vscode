@@ -113,6 +113,33 @@ export class LeapfrogSyncService {
 	}
 
 	/**
+	 * Ensure project exists on backend (creates org + project if missing).
+	 */
+	async ensureProject(projectId: string, name?: string): Promise<void> {
+		const token = this.getAuthToken ? await this.getAuthToken() : undefined;
+		const url = `${getIndexingApiBase()}/api/indexing/projects/ensure`;
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		};
+		if (token) {
+			headers['Authorization'] = `Bearer ${token}`;
+		}
+
+		const res = await fetch(url, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ projectId, name: name ?? 'Workspace' }),
+		});
+
+		if (!res.ok) {
+			const text = await res.text();
+			this.logService.warn('[Leapfrog] ensureProject failed:', res.status, text);
+			throw new Error(`Failed to ensure project: ${res.status}`);
+		}
+	}
+
+	/**
 	 * Fetch remote Merkle tree from backend.
 	 */
 	async fetchRemoteMerkleTree(projectId: string): Promise<MerkleTree | null> {

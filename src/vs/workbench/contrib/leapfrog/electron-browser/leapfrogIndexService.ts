@@ -380,6 +380,29 @@ export class LeapfrogIndexService extends Disposable implements ILeapfrogIndexSe
 		this.logService.info(`[Leapfrog] Removed file from index: ${filePath}`);
 	}
 
+	/**
+	 * Reset index and merkle tree. Deletes local merkle.json and clears all index data.
+	 * Triggers full re-index after reset.
+	 */
+	async resetIndex(): Promise<void> {
+		if (!this.initialized || !this.projectPath) {
+			return;
+		}
+		this.cancelIndexing();
+		await this.merkleTree.deleteMerkleTree(this.projectPath);
+		await this.db.clearAll();
+		this.updateProgress({
+			status: 'idle',
+			totalChunks: 0,
+			embeddedChunks: 0,
+			processedFiles: 0,
+			totalFiles: 0,
+			currentFile: undefined,
+		});
+		this.logService.info('[Leapfrog] Index reset complete');
+		await this.indexWorkspace();
+	}
+
 	// -----------------------------------------------------------------------
 	// Search
 	// -----------------------------------------------------------------------

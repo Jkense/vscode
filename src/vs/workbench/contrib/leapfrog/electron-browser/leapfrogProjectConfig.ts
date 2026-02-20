@@ -6,6 +6,7 @@
 /**
  * Leapfrog project config - stores projectId for backend sync.
  * Read/write from .leapfrog/config.json
+ * Project ID is auto-generated from workspace path when not present.
  */
 
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -19,6 +20,20 @@ export interface ILeapfrogProjectConfig {
 	projectId?: string;
 }
 
+/**
+ * Derive a stable project ID from workspace path.
+ * Uses first 12 chars of SHA-256 hash for cross-machine consistency.
+ */
+async function deriveProjectIdFromPath(projectPath: string): Promise<string> {
+	const normalized = projectPath.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+	const encoder = new TextEncoder();
+	const data = encoder.encode(normalized);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+	return 'lf-' + hashHex.slice(0, 12);
+}
+
 export class LeapfrogProjectConfig {
 
 	constructor(private readonly fileService: IFileService) { }
@@ -30,6 +45,19 @@ export class LeapfrogProjectConfig {
 		} catch {
 			return undefined;
 		}
+	}
+
+	/**
+	 * Get or auto-create project ID. If not in config, derives from path and saves.
+	 */
+	async getOrCreateProjectId(projectPath: string): Promise<string> {
+		const existing = await this.getProjectId(projectPath);
+		if (existing) {
+			return existing;
+		}
+		const projectId = await deriveProjectIdFromPath(projectPath);
+		await this.setProjectId(projectPath, projectId);
+		return projectId;
 	}
 
 	async setProjectId(projectPath: string, projectId: string): Promise<void> {

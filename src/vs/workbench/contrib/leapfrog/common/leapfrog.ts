@@ -604,6 +604,7 @@ export interface ILeapfrogIndexService {
 	indexWorkspace(): Promise<void>;
 	indexFile(filePath: string): Promise<void>;
 	removeFile(filePath: string): Promise<void>;
+	resetIndex(): Promise<void>;
 	getProgress(): ILeapfrogIndexProgress;
 	isReady(): boolean;
 

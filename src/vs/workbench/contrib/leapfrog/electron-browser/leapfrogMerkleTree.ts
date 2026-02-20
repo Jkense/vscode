@@ -202,6 +202,22 @@ export class LeapfrogMerkleTree {
 	}
 
 	/**
+	 * Delete local Merkle tree (.leapfrog/merkle.json).
+	 * Forces full re-index and re-sync on next run.
+	 */
+	async deleteMerkleTree(projectPath: string): Promise<void> {
+		const projectUri = URI.file(projectPath);
+		const leapfrogDir = joinPath(projectUri, '.leapfrog');
+		const merkleUri = joinPath(leapfrogDir, MERKLE_FILENAME);
+
+		try {
+			await this.fileService.del(merkleUri, { useTrash: false });
+		} catch {
+			// File may not exist
+		}
+	}
+
+	/**
 	 * Save Merkle tree to .leapfrog/merkle.json
 	 */
 	async saveMerkleTree(projectPath: string, tree: MerkleTree): Promise<void> {

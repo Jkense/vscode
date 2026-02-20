@@ -103,6 +103,19 @@ export class LeapfrogIndexJsonDatabase extends Disposable {
 		this.fileUri = undefined;
 	}
 
+	/**
+	 * Clear all index data (hashes, chunks, embeddings). Forces full re-index.
+	 */
+	async clearAll(): Promise<void> {
+		if (!this.store) return;
+		this.store.file_hashes = {};
+		this.store.chunks = [];
+		this.store.embeddings = {};
+		this.dirty = true;
+		this.saveScheduler.cancel();
+		await this.flush();
+	}
+
 	private get data(): ILeapfrogIndexStore {
 		if (!this.store) {
 			throw new Error('Index database not open');

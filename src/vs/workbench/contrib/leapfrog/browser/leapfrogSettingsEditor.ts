@@ -261,12 +261,12 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		append(syncBtn, document.createTextNode(' ' + (isSyncing ? nls.localize('leapfrogSettingsSyncing', 'Syncing') : nls.localize('leapfrogSettingsSync', 'Sync'))));
 		syncBtn.onclick = () => this.commandService.executeCommand('leapfrog.indexWorkspace');
 
-		const deleteBtn = append(actionsRow, $('button.settings-button.outline.sm', {})) as HTMLButtonElement;
-		deleteBtn.disabled = !!isSyncing;
-		append(deleteBtn, $('span', { className: ThemeIcon.asClassName(Codicon.trash) }));
-		append(deleteBtn, document.createTextNode(' ' + nls.localize('leapfrogSettingsDeleteIndex', 'Delete Index')));
-		deleteBtn.title = nls.localize('leapfrogSettingsComingSoon', 'Coming soon');
-		deleteBtn.onclick = () => { /* Coming soon */ };
+		const resetBtn = append(actionsRow, $('button.settings-button.outline.sm', {})) as HTMLButtonElement;
+		resetBtn.disabled = !!isSyncing;
+		append(resetBtn, $('span', { className: ThemeIcon.asClassName(Codicon.trash) }));
+		append(resetBtn, document.createTextNode(' ' + nls.localize('leapfrogSettingsResetIndex', 'Reset Index')));
+		resetBtn.title = nls.localize('leapfrogSettingsResetIndexTooltip', 'Delete merkle tree and index, then re-index from scratch.');
+		resetBtn.onclick = () => this.commandService.executeCommand('leapfrog.resetIndex');
 	}
 
 	private renderIndexNewFoldersCard(parent: HTMLElement): void {
