@@ -625,11 +625,25 @@ export class LeapfrogTagsView extends ViewPane {
 			"#6366f1",
 		];
 
-		const colorItems = defaultColors.map((color, i) => ({
-			label: `$(circle-filled) Color ${i + 1}`,
-			color,
-			description: color,
-		}));
+		const colorItems = defaultColors.map((color, i) => {
+			const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
+			try {
+				const encoded = btoa(unescape(encodeURIComponent(svg)));
+				const uri = URI.parse(`data:image/svg+xml;base64,${encoded}`);
+				return {
+					label: `Color ${i + 1}`,
+					color,
+					description: color,
+					iconPath: { dark: uri, light: uri },
+				};
+			} catch {
+				return {
+					label: `$(circle-filled) Color ${i + 1}`,
+					color,
+					description: color,
+				};
+			}
+		});
 
 		const picked = await this.quickInputService.pick(colorItems, {
 			placeHolder: nls.localize("pickColor", "Pick a tag color"),
@@ -682,14 +696,11 @@ export class LeapfrogTagsView extends ViewPane {
 				const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
 				try {
 					const encoded = btoa(unescape(encodeURIComponent(svg)));
-					const iconPath = URI.from({
-						scheme: "data",
-						path: `image/svg+xml;base64,${encoded}`,
-					});
+					const uri = URI.parse(`data:image/svg+xml;base64,${encoded}`);
 					return {
 						label: `Color ${i + 1}`,
 						description: color,
-						iconPath,
+						iconPath: { dark: uri, light: uri },
 						color,
 					};
 				} catch {

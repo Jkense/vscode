@@ -30,6 +30,7 @@ import { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../.
 import { KeyMod, KeyCode, KeyChord } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ITextAnchor, ILeapfrogTagService, ILeapfrogTagWithCount, ILeapfrogTagApplicationWithTag } from '../common/leapfrog.js';
+import { URI } from '../../../../base/common/uri.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { mainWindow } from '../../../../base/browser/window.js';
@@ -292,8 +293,18 @@ class ApplyTagAction extends Action2 {
 		if (!name) { return undefined; }
 
 		const DEFAULT_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+		const colorItems = DEFAULT_COLORS.map((c, i) => {
+			const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${c}"/></svg>`;
+			try {
+				const encoded = btoa(unescape(encodeURIComponent(svg)));
+				const uri = URI.parse(`data:image/svg+xml;base64,${encoded}`);
+				return { label: `Color ${i + 1}`, description: c, color: c, iconPath: { dark: uri, light: uri } };
+			} catch {
+				return { label: `$(circle-filled) Color ${i + 1}`, description: c, color: c };
+			}
+		});
 		const colorPick = await quickInputService.pick(
-			DEFAULT_COLORS.map(c => ({ label: `$(circle-filled) ${c}`, description: c, color: c })),
+			colorItems,
 			{ placeHolder: nls.localize('pickColor', "Select a tag color") },
 		);
 		const color = (colorPick as { color: string } | undefined)?.color ?? '#22c55e';
