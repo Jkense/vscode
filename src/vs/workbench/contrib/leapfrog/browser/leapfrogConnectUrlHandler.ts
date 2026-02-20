@@ -15,7 +15,7 @@ import { ISecretStorageService } from '../../../../platform/secrets/common/secre
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
+import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { localize } from '../../../../nls.js';
 import { LEAPFROG_CLERK_TOKEN_KEY, LEAPFROG_PROJECT_ID_KEY, LEAPFROG_USER_EMAIL_KEY, LEAPFROG_USER_IMAGE_URL_KEY, LEAPFROG_USER_NAME_KEY } from '../common/leapfrogAuthKeys.js';
 
@@ -75,5 +75,3 @@ export class LeapfrogConnectUrlHandler extends Disposable implements IWorkbenchC
 		return true;
 	}
 }
-
-registerWorkbenchContribution2(LeapfrogConnectUrlHandler.ID, LeapfrogConnectUrlHandler, WorkbenchPhase.AfterRestored);

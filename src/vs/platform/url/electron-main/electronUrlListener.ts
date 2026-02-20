@@ -15,6 +15,7 @@ import { IProductService } from '../../product/common/productService.js';
 import { IURLService } from '../common/url.js';
 import { IProtocolUrl } from './url.js';
 import { IWindowsMainService } from '../../windows/electron-main/windows.js';
+import { getWindowsProtocolHandlerArgs } from './protocolHandlerArgs.js';
 
 /**
  * A listener for URLs that are opened from the OS and handled by VSCode.
@@ -51,10 +52,16 @@ export class ElectronURLListener extends Disposable {
 		// Windows: install as protocol handler
 		// Skip in portable mode: the registered command wouldn't preserve
 		// portable mode settings, causing issues with OAuth flows
-		if (isWindows && !environmentMainService.isPortable) {
-			const windowsParameters = environmentMainService.isBuilt ? [] : [`"${environmentMainService.appRoot}"`];
-			windowsParameters.push('--open-url', '--');
-			app.setAsDefaultProtocolClient(productService.urlProtocol, process.execPath, windowsParameters);
+		if (isWindows) {
+			const windowsParameters = getWindowsProtocolHandlerArgs({
+				isBuilt: environmentMainService.isBuilt,
+				isPortable: environmentMainService.isPortable,
+				appRoot: environmentMainService.appRoot,
+				userDataPath: environmentMainService.userDataPath,
+			});
+			if (windowsParameters.length > 0) {
+				app.setAsDefaultProtocolClient(productService.urlProtocol, process.execPath, windowsParameters);
+			}
 		}
 
 		// macOS: listen to `open-url` events from here on to handle

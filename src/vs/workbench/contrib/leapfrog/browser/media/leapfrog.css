@@ -181,6 +181,7 @@
 	gap: 6px;
 	border-bottom: 1px solid var(--vscode-panel-border);
 	flex-shrink: 0;
+	min-width: 0;
 }
 
 .leapfrog-tags-add-btn {
@@ -203,10 +204,13 @@
 
 .leapfrog-tags-search {
 	flex: 1;
+	min-width: 0;
 }
 
 .leapfrog-tags-search input {
 	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 	padding: 3px 8px;
 	border: 1px solid var(--vscode-input-border);
 	background: var(--vscode-input-background);

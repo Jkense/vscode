@@ -65,8 +65,9 @@ import { LeapfrogSettingsEditor } from './leapfrogSettingsEditor.js';
 // Import dialogs
 import { TranscriptSettingsWizard } from './dialogs/transcriptSettingsWizard.js';
 
-// Import Connect URL handler (registers leapfrog://connect)
-import './leapfrogConnectUrlHandler.js';
+// Import and register Connect URL handler (leapfrog://connect)
+import { LeapfrogConnectUrlHandler } from './leapfrogConnectUrlHandler.js';
+registerWorkbenchContribution2(LeapfrogConnectUrlHandler.ID, LeapfrogConnectUrlHandler, WorkbenchPhase.AfterRestored);
 
 // Register icons
 const leapfrogTagsViewIcon = registerIcon('leapfrog-tags-view-icon', Codicon.tag, localize('leapfrogTagsViewIcon', 'View icon of the Leapfrog Tags view.'));

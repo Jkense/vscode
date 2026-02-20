@@ -33,6 +33,8 @@ import {
 	IAsyncDataSource,
 	ITreeNode,
 	ITreeRenderer,
+	ITreeFilter,
+	TreeVisibility,
 } from "../../../../../base/browser/ui/tree/tree.js";
 import {
 	IListVirtualDelegate,
@@ -40,7 +42,11 @@ import {
 } from "../../../../../base/browser/ui/list/list.js";
 import { IListAccessibilityProvider } from "../../../../../base/browser/ui/list/listWidget.js";
 import { WorkbenchAsyncDataTree } from "../../../../../platform/list/browser/listService.js";
-import { FuzzyScore } from "../../../../../base/common/filters.js";
+import {
+	FuzzyScore,
+	fuzzyScore,
+	FuzzyScoreOptions,
+} from "../../../../../base/common/filters.js";
 import {
 	LEAPFROG_TAGS_VIEW_ID,
 	ILeapfrogTagService,
@@ -410,6 +416,67 @@ class SnippetRenderer implements ITreeRenderer<
 }
 
 // ---------------------------------------------------------------------------
+// Tag tree filter (fuzzy search)
+// ---------------------------------------------------------------------------
+
+function getSearchableText(element: TagTreeElement): string {
+	switch (element.type) {
+		case "tag":
+			return element.tag.name;
+		case "file":
+			return element.group.fileName;
+		case "snippet":
+			return element.application.selectedText;
+	}
+}
+
+function matchesFuzzy(query: string, text: string): FuzzyScore | undefined {
+	if (!query.trim()) {
+		return undefined;
+	}
+	const pattern = query.trim();
+	const patternLow = pattern.toLowerCase();
+	const word = text;
+	const wordLow = word.toLowerCase();
+	return fuzzyScore(pattern, patternLow, 0, word, wordLow, 0, {
+		firstMatchCanBeWeak: true,
+		boostFullMatch: true,
+	} as FuzzyScoreOptions);
+}
+
+class TagTreeFilter implements ITreeFilter<
+	TagTreeInput | TagTreeElement,
+	FuzzyScore
+> {
+	query = "";
+
+	filter(
+		element: TagTreeInput | TagTreeElement,
+		parentVisibility: TreeVisibility,
+	): import("../../../../../base/browser/ui/tree/tree.js").TreeFilterResult<FuzzyScore> {
+		if (element === TAG_TREE_INPUT) {
+			return TreeVisibility.Recurse;
+		}
+
+		const q = this.query.trim();
+		if (!q) {
+			return TreeVisibility.Visible;
+		}
+
+		const text = getSearchableText(element);
+		const score = matchesFuzzy(q, text);
+		if (score) {
+			return { visibility: TreeVisibility.Visible, data: score };
+		}
+
+		// No match: for leaves (snippet) hide; for parents (tag, file) recurse so children can match
+		return element.type === "snippet"
+			? TreeVisibility.Hidden
+			: TreeVisibility.Recurse;
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Tags View
 // ---------------------------------------------------------------------------
 
@@ -425,6 +492,7 @@ export class LeapfrogTagsView extends ViewPane {
 		| undefined;
 	private treeContainer: HTMLElement | undefined;
 	private searchInput: HTMLInputElement | undefined;
+	private readonly treeFilter = new TagTreeFilter();
 
 	constructor(
 		options: IViewletViewOptions,
@@ -480,7 +548,7 @@ export class LeapfrogTagsView extends ViewPane {
 		const searchContainer = append(toolbar, $(".leapfrog-tags-search"));
 		this.searchInput = append(searchContainer, $("input")) as HTMLInputElement;
 		this.searchInput.type = "text";
-		this.searchInput.placeholder = nls.localize("searchTags", "Filter tags...");
+		this.searchInput.placeholder = nls.localize("searchTags", "Search");
 		this.searchInput.oninput = () => this.onSearchChanged();
 
 		// Tree container
@@ -523,6 +591,7 @@ export class LeapfrogTagsView extends ViewPane {
 				identityProvider,
 				accessibilityProvider,
 				collapseByDefault: () => true,
+				filter: this.treeFilter,
 			},
 		) as WorkbenchAsyncDataTree<TagTreeInput, TagTreeElement, FuzzyScore>;
 
@@ -800,8 +869,8 @@ export class LeapfrogTagsView extends ViewPane {
 	}
 
 	private onSearchChanged(): void {
-		// For now, just re-render. A proper filter could be added to the tree options.
-		// The tree's built-in type filter handles keyboard navigation already.
+		this.treeFilter.query = this.searchInput?.value ?? "";
+		this.tree?.refilter();
 	}
 
 	protected override layoutBody(height: number, width: number): void {
