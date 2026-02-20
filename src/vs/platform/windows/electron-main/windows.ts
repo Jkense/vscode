@@ -174,10 +174,40 @@ export function defaultBrowserWindowOptions(accessor: ServicesAccessor, windowSt
 		}
 	}
 
-	if (isLinux) {
-		options.icon = join(environmentMainService.appRoot, 'resources/linux/code.png'); // always on Linux
-	} else if (isWindows && !environmentMainService.isBuilt) {
-		options.icon = join(environmentMainService.appRoot, 'resources/win32/code_150x150.png'); // only when running out of sources on Windows
+	// Use Leapfrog favicon for all platforms
+	const leapfrogIconPath = join(environmentMainService.appRoot, 'resources/leapfrog.ico');
+	logService.debug(`[Icon] Attempting to load Leapfrog icon from: ${leapfrogIconPath}`);
+
+	try {
+		// On Windows, try string path first as it works better with window chrome
+		if (isWindows) {
+			options.icon = leapfrogIconPath;
+			logService.debug(`[Icon] Set Windows window icon to: ${leapfrogIconPath}`);
+		} else {
+			// On other platforms, use nativeImage
+			const nativeImg = electron.nativeImage.createFromPath(leapfrogIconPath);
+			if (!nativeImg.isEmpty()) {
+				options.icon = nativeImg;
+				logService.debug(`[Icon] Successfully loaded Leapfrog icon as nativeImage`);
+			} else {
+				logService.warn(`[Icon] Leapfrog icon image is empty`);
+			}
+		}
+	} catch (err) {
+		logService.error(`[Icon] Failed to load Leapfrog icon:`, err);
+		// Fall back to platform-specific icons if favicon doesn't work
+		if (isLinux) {
+			const linuxIconPath = join(environmentMainService.appRoot, 'resources/linux/code.png');
+			try {
+				const nativeImg = electron.nativeImage.createFromPath(linuxIconPath);
+				if (!nativeImg.isEmpty()) {
+					options.icon = nativeImg;
+					logService.debug(`[Icon] Successfully loaded Linux icon`);
+				}
+			} catch (linuxErr) {
+				logService.error(`[Icon] Failed to load Linux icon:`, linuxErr);
+			}
+		}
 	}
 
 	if (isMacintosh) {

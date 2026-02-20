@@ -9,6 +9,7 @@ import './services/stubServices.js';
 import './media/leapfrog.css';
 import './media/leapfrogChat.css';
 import './media/preferencesView.css';
+import './media/leapfrogSettings.css';
 
 // Register tag application controller (editor decorations + apply tag command)
 import './tagApplicationController.js';
@@ -27,7 +28,10 @@ import { IContextKeyService, IContextKey } from '../../../../platform/contextkey
 import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContainer.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { URI } from '../../../../base/common/uri.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IExtensionService } from '../../../services/extensions/common/extensions.js';
@@ -35,6 +39,9 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { MenuId, Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { EditorPaneDescriptor, IEditorPaneRegistry } from '../../../browser/editor.js';
 
 import { leapfrogConfigurationSchema } from '../common/leapfrogConfiguration.js';
 import {
@@ -42,22 +49,25 @@ import {
 	LEAPFROG_TAGS_VIEW_ID,
 	LEAPFROG_CHAT_VIEWLET_ID,
 	LEAPFROG_CHAT_VIEW_ID,
-	LEAPFROG_PREFERENCES_VIEWLET_ID,
-	LEAPFROG_PREFERENCES_VIEW_ID,
 	LeapfrogTagsViewletVisibleContext,
 	LeapfrogChatViewVisibleContext,
-	LeapfrogPreferencesViewletVisibleContext,
+	ILeapfrogTranscriptionOptions,
 } from '../common/leapfrog.js';
 
 // Import views
 import { LeapfrogTagsView } from './views/tagsView.js';
 import { LeapfrogChatViewPane } from './views/leapfrogChatViewPane.js';
-import { LeapfrogPreferencesView } from './views/preferencesView.js';
+
+// Import editor
+import { LeapfrogSettingsEditorInput } from './leapfrogSettingsEditorInput.js';
+import { LeapfrogSettingsEditor } from './leapfrogSettingsEditor.js';
+
+// Import dialogs
+import { TranscriptSettingsWizard } from './dialogs/transcriptSettingsWizard.js';
 
 // Register icons
 const leapfrogTagsViewIcon = registerIcon('leapfrog-tags-view-icon', Codicon.tag, localize('leapfrogTagsViewIcon', 'View icon of the Leapfrog Tags view.'));
 const leapfrogChatViewIcon = registerIcon('leapfrog-chat-view-icon', Codicon.commentDiscussion, localize('leapfrogChatViewIcon', 'View icon of the Leapfrog Chat view.'));
-const leapfrogPreferencesViewIcon = registerIcon('leapfrog-preferences-view-icon', Codicon.settingsGear, localize('leapfrogPreferencesViewIcon', 'View icon of the Leapfrog Preferences view.'));
 
 // Register configuration
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -145,47 +155,6 @@ export class LeapfrogTagsViewPaneContainer extends ViewPaneContainer {
 	}
 }
 
-/**
- * Leapfrog Preferences View Pane Container (Sidebar - standalone activity bar entry)
- */
-export class LeapfrogPreferencesViewPaneContainer extends ViewPaneContainer {
-
-	private preferencesViewletVisibleContextKey: IContextKey<boolean>;
-
-	constructor(
-		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
-		@ITelemetryService telemetryService: ITelemetryService,
-		@IWorkspaceContextService contextService: IWorkspaceContextService,
-		@IStorageService storageService: IStorageService,
-		@IConfigurationService configurationService: IConfigurationService,
-		@IInstantiationService instantiationService: IInstantiationService,
-		@IContextKeyService contextKeyService: IContextKeyService,
-		@IThemeService themeService: IThemeService,
-		@IContextMenuService contextMenuService: IContextMenuService,
-		@IExtensionService extensionService: IExtensionService,
-		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
-		@ILogService logService: ILogService,
-	) {
-		super(LEAPFROG_PREFERENCES_VIEWLET_ID, { mergeViewWithContainerWhenSingleView: true }, instantiationService, configurationService, layoutService, contextMenuService, telemetryService, extensionService, themeService, storageService, contextService, viewDescriptorService, logService);
-
-		this.preferencesViewletVisibleContextKey = LeapfrogPreferencesViewletVisibleContext.bindTo(contextKeyService);
-	}
-
-	override create(parent: HTMLElement): void {
-		super.create(parent);
-		parent.classList.add('leapfrog-preferences-viewlet');
-	}
-
-	override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		this.preferencesViewletVisibleContextKey.set(visible);
-	}
-
-	override getTitle(): string {
-		return localize('preferences', "Preferences");
-	}
-}
-
 // Register view containers (after classes are defined)
 const viewContainersRegistry = Registry.as<IViewContainersRegistry>(ViewExtensions.ViewContainersRegistry);
 const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
@@ -219,27 +188,6 @@ const TAGS_VIEW_CONTAINER: ViewContainer = viewContainersRegistry.registerViewCo
 		title: localize2('openTags', "Open Tags"),
 		keybindings: {
 			primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT,
-		},
-		order: 1,
-	},
-}, ViewContainerLocation.Sidebar, { isDefault: false });
-
-/**
- * Preferences view container in the sidebar (standalone activity bar entry)
- */
-const PREFERENCES_VIEW_CONTAINER: ViewContainer = viewContainersRegistry.registerViewContainer({
-	id: LEAPFROG_PREFERENCES_VIEWLET_ID,
-	title: localize2('preferences', "Preferences"),
-	icon: leapfrogPreferencesViewIcon,
-	ctorDescriptor: new SyncDescriptor(LeapfrogPreferencesViewPaneContainer),
-	storageId: 'workbench.preferences.views.state',
-	order: 2,  // After Tags and Explorer
-	hideIfEmpty: false,
-	openCommandActionDescriptor: {
-		id: 'workbench.view.preferences.focus',
-		title: localize2('openPreferences', "Open Preferences"),
-		keybindings: {
-			primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Comma,
 		},
 		order: 1,
 	},
@@ -296,23 +244,6 @@ class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribu
 		};
 
 		viewsRegistry.registerViews([chatViewDescriptor], CHAT_VIEW_CONTAINER);
-
-		// Register preferences view in sidebar
-		const preferencesViewDescriptor: IViewDescriptor = {
-			id: LEAPFROG_PREFERENCES_VIEW_ID,
-			name: localize2('leapfrogPreferences', "Preferences"),
-			ctorDescriptor: new SyncDescriptor(LeapfrogPreferencesView),
-			containerIcon: leapfrogPreferencesViewIcon,
-			order: 1,
-			canToggleVisibility: false,
-			canMoveView: true,
-			focusCommand: {
-				id: 'workbench.leapfrog.preferencesView.focus',
-				keybindings: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyCode.Comma) }
-			}
-		};
-
-		viewsRegistry.registerViews([preferencesViewDescriptor], PREFERENCES_VIEW_CONTAINER);
 	}
 }
 
@@ -320,14 +251,13 @@ class LeapfrogViewsContribution extends Disposable implements IWorkbenchContribu
  * Storage key for pinned view containers in activity bar
  */
 const PINNED_VIEW_CONTAINERS_KEY = 'workbench.activity.pinnedViewlets2';
-const LEAPFROG_INITIALIZED_KEY = 'leapfrog.activityBarInitialized.v3';
+const LEAPFROG_INITIALIZED_KEY = 'leapfrog.activityBarInitialized.v4';
 
 /**
  * View containers to show in Leapfrog (research-focused)
  */
 const VISIBLE_VIEW_CONTAINERS = [
 	'workbench.view.tags',          // Tags (codebook)
-	'workbench.view.preferences',   // Preferences (indexing)
 	'workbench.view.explorer',      // File Explorer
 	'workbench.view.search',        // Search
 ];
@@ -336,6 +266,7 @@ const VISIBLE_VIEW_CONTAINERS = [
  * View containers to hide by default (developer-focused)
  */
 const HIDDEN_VIEW_CONTAINERS = [
+	'workbench.view.preferences',   // Preferences (now editor tab in settings menu)
 	'workbench.view.leapfrog',      // Removed Leapfrog sidebar (projects handled elsewhere)
 	'workbench.view.scm',           // Source Control
 	'workbench.view.debug',         // Run and Debug
@@ -423,6 +354,93 @@ class LeapfrogActivityBarContribution extends Disposable implements IWorkbenchCo
 		);
 	}
 }
+
+// Register editor input and pane
+const editorPaneRegistry = Registry.as<IEditorPaneRegistry>('workbench.contributions.editors');
+editorPaneRegistry.registerEditorPane(
+	EditorPaneDescriptor.create(LeapfrogSettingsEditor, LeapfrogSettingsEditor.ID, localize('leapfrogSettings', "Leapfrog Settings")),
+	[new SyncDescriptor(LeapfrogSettingsEditorInput)]
+);
+
+// Register action to open Leapfrog Settings editor from gear icon menu
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.leapfrogSettings',
+			title: localize2('openLeapfrogSettings', "Leapfrog Settings"),
+			menu: [
+				{
+					id: MenuId.GlobalActivity,
+					group: '2_configuration',
+					order: 3,
+					when: undefined,
+				},
+				{
+					id: MenuId.MenubarPreferencesMenu,
+					group: '2_configuration',
+					order: 3,
+					when: undefined,
+				},
+			],
+		});
+	}
+
+	override async run(accessor: any): Promise<void> {
+		const editorService = accessor.get(IEditorService);
+		const input = new LeapfrogSettingsEditorInput();
+		await editorService.openEditor(input);
+	}
+});
+
+// Register "Order Transcript" action – shows wizard then runs leapfrog.transcribe
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'leapfrog.orderTranscript',
+			title: localize2('orderTranscript', "Order Transcript"),
+			menu: [
+				{
+					id: MenuId.ExplorerContext,
+					group: 'leapfrog',
+					order: 1,
+				},
+			],
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, uri?: URI): Promise<void> {
+		const instantiationService = accessor.get(IInstantiationService);
+		const commandService = accessor.get(ICommandService);
+		const notificationService = accessor.get(INotificationService);
+
+		// Show transcript settings wizard
+		const wizard = instantiationService.createInstance(TranscriptSettingsWizard);
+		let options: ILeapfrogTranscriptionOptions | undefined;
+		try {
+			options = await wizard.showSettingsDialog();
+		} finally {
+			wizard.dispose();
+		}
+
+		if (!options) {
+			return; // User cancelled
+		}
+
+		// Get file path – prefer the Explorer context URI, else let the command handle it
+		const filePath = uri?.fsPath;
+		if (!filePath) {
+			notificationService.warn(localize('leapfrogTranscriptNoFile', 'Please right-click an audio or video file to order a transcript.'));
+			return;
+		}
+
+		try {
+			await commandService.executeCommand('leapfrog.transcribe', filePath, options);
+			notificationService.info(localize('leapfrogTranscriptStarted', 'Transcription started for: {0}', filePath.split(/[\\/]/).pop() ?? filePath));
+		} catch (err) {
+			notificationService.error(localize('leapfrogTranscriptError', 'Transcription failed: {0}', String(err)));
+		}
+	}
+});
 
 // Register contributions
 registerWorkbenchContribution2(LeapfrogViewsContribution.ID, LeapfrogViewsContribution, WorkbenchPhase.BlockStartup);

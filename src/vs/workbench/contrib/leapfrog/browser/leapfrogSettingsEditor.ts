@@ -188,14 +188,14 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		append(progressBlock, $('p', { className: 'file-count' }, fileCount.toLocaleString() + ' ' + nls.localize('leapfrogSettingsFiles', 'files')));
 
 		const actionsRow = append(cardContent, $('div.flex.items-center.justify-center.gap-3.pt-1'));
-		const syncBtn = append(actionsRow, $('button.settings-button.outline.sm', {}));
+		const syncBtn = append(actionsRow, $('button.settings-button.outline.sm', {})) as HTMLButtonElement;
 		syncBtn.disabled = !!isSyncing;
 		const syncIcon = append(syncBtn, $('span'));
 		syncIcon.className = isSyncing ? 'codicon codicon-loading' : ThemeIcon.asClassName(Codicon.sync);
 		append(syncBtn, document.createTextNode(' ' + (isSyncing ? nls.localize('leapfrogSettingsSyncing', 'Syncing') : nls.localize('leapfrogSettingsSync', 'Sync'))));
 		syncBtn.onclick = () => this.commandService.executeCommand('leapfrog.indexWorkspace');
 
-		const deleteBtn = append(actionsRow, $('button.settings-button.outline.sm', {}));
+		const deleteBtn = append(actionsRow, $('button.settings-button.outline.sm', {})) as HTMLButtonElement;
 		deleteBtn.disabled = !!isSyncing;
 		append(deleteBtn, $('span', { className: ThemeIcon.asClassName(Codicon.trash) }));
 		append(deleteBtn, document.createTextNode(' ' + nls.localize('leapfrogSettingsDeleteIndex', 'Delete Index')));
