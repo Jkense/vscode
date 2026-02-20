@@ -19,10 +19,7 @@ import { IViewDescriptorService } from "../../../../common/views.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import { ILocalizedString } from "../../../../../platform/action/common/action.js";
 import { IHoverService } from "../../../../../platform/hover/browser/hover.js";
-import {
-	IQuickInputService,
-	IQuickPickItem,
-} from "../../../../../platform/quickinput/common/quickInput.js";
+import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import { URI } from "../../../../../base/common/uri.js";
 import {
 	$,
@@ -679,50 +676,31 @@ export class LeapfrogTagsView extends ViewPane {
 			"#6366f1",
 		];
 
-		interface ColorPickItem {
-			label: string;
-			description: string;
-			iconPath?: URI;
-			color: string;
-		}
-
-		const colorItems: ColorPickItem[] = [
-			...defaultColors.map((color, i) => {
-				// Create colored circle SVG as data URI
-				const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
-				const iconPath = URI.from({
-					scheme: "data",
-					path: `image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
-				});
-				return {
-					label: `Color ${i + 1}`,
-					description: color,
-					iconPath,
-					color,
-				};
-			}),
+		const colorItems = [
+			...defaultColors.map((color, i) => ({
+				label: `$(circle-filled) Color ${i + 1}`,
+				description: color,
+				color,
+			})),
 			{
-				label: "Custom color...",
+				label: "$(edit) Custom color...",
 				description: "Enter a hex value",
 				color: "__custom__",
 			},
 		];
 
-		const picked = await this.quickInputService.pick(
-			colorItems as unknown as IQuickPickItem[],
-			{
-				placeHolder: nls.localize(
-					"pickTagColor",
-					"Pick a color for '{0}'",
-					tag.name,
-				),
-			},
-		);
+		const picked = await this.quickInputService.pick(colorItems, {
+			placeHolder: nls.localize(
+				"pickTagColor",
+				"Pick a color for '{0}'",
+				tag.name,
+			),
+		});
 		if (!picked) {
 			return;
 		}
 
-		let finalColor = (picked as ColorPickItem).color;
+		let finalColor = (picked as (typeof colorItems)[number]).color;
 
 		if (finalColor === "__custom__") {
 			const custom = await this.quickInputService.input({
