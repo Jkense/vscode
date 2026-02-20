@@ -6,7 +6,11 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
+import { config as loadDotenv } from 'dotenv';
 import type { IProductConfiguration } from './vs/base/common/product.js';
+
+// Load .env from project root (apps/vscode/.env) before any other code
+loadDotenv({ path: path.join(path.dirname(import.meta.dirname), '.env') });
 
 const require = createRequire(import.meta.url);
 const isWindows = process.platform === 'win32';

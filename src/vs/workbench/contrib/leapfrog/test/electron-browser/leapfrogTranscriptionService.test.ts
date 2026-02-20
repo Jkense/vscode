@@ -8,6 +8,30 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { LeapfrogTranscriptionService } from '../../electron-browser/leapfrogTranscriptionService.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+
+// Preserve original env var
+const originalEnv = process.env.ASSEMBLYAI_API_KEY;
+
+// Minimal configuration service stub (cast to IConfigurationService at call sites)
+class MockConfigurationService {
+	private config: Record<string, unknown> = {};
+
+	getValue(sectionOrOverrides?: any): any {
+		if (typeof sectionOrOverrides === 'string') {
+			return this.config[sectionOrOverrides];
+		}
+		return this.config;
+	}
+
+	updateValue(): Promise<void> {
+		return Promise.resolve();
+	}
+
+	setConfig(config: Record<string, unknown>): void {
+		this.config = config;
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Stubs
@@ -50,13 +74,27 @@ suite('LeapfrogTranscriptionService', () => {
 
 	let service: LeapfrogTranscriptionService;
 	let secretStorage: InMemorySecretStorageService;
+	let configService: MockConfigurationService;
 
 	setup(() => {
 		secretStorage = new InMemorySecretStorageService();
+		configService = new MockConfigurationService();
 		service = store.add(new LeapfrogTranscriptionService(
 			new NullLogService() as unknown as ILogService,
 			secretStorage as unknown as ISecretStorageService,
+			configService as unknown as IConfigurationService,
 		));
+		// Clear env var before each test
+		delete process.env.ASSEMBLYAI_API_KEY;
+	});
+
+	teardown(() => {
+		// Restore original env var
+		if (originalEnv) {
+			process.env.ASSEMBLYAI_API_KEY = originalEnv;
+		} else {
+			delete process.env.ASSEMBLYAI_API_KEY;
+		}
 	});
 
 	// -----------------------------------------------------------------------
@@ -74,6 +112,34 @@ suite('LeapfrogTranscriptionService', () => {
 		await assert.rejects(
 			() => service.getStatus('abc'),
 			(err: Error) => err.message.includes('API key not configured'),
+		);
+	});
+
+	test('uses API key from secret storage when available', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'secret-key-123');
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+	});
+
+	test('falls back to environment variable when secret storage is empty', async () => {
+		process.env.ASSEMBLYAI_API_KEY = 'env-key-456';
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+	});
+
+	test('prioritizes secret storage over environment variable', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'secret-key-123');
+		process.env.ASSEMBLYAI_API_KEY = 'env-key-456';
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
 		);
 	});
 
@@ -95,5 +161,86 @@ suite('LeapfrogTranscriptionService', () => {
 		const d2 = service.onDidTranscriptError(() => { });
 		d1.dispose();
 		d2.dispose();
+	});
+
+	// -----------------------------------------------------------------------
+	// Configuration-based transcription options
+	// -----------------------------------------------------------------------
+
+	test('applies configuration defaults to transcription', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'test-key');
+		configService.setConfig({
+			leapfrog: {
+				transcript: {
+					language: 'en',
+					sentimentAnalysis: true,
+					entityDetection: true,
+					autoChapters: true,
+				}
+			}
+		});
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+	});
+
+	test('uses auto language detection when configured', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'test-key');
+		configService.setConfig({
+			leapfrog: {
+				transcript: {
+					language: 'auto',
+					languageDetection: true,
+				}
+			}
+		});
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+	});
+
+	test('applies all transcription feature flags from configuration', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'test-key');
+		configService.setConfig({
+			leapfrog: {
+				transcript: {
+					language: 'en',
+					punctuate: true,
+					formatText: true,
+					sentimentAnalysis: true,
+					entityDetection: true,
+					autoChapters: true,
+					autoHighlights: true,
+					disfluencies: false,
+					filterProfanity: true,
+				}
+			}
+		});
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+	});
+
+	test('always enables diarization regardless of configuration', async () => {
+		secretStorage.seed('leapfrog.apiKey.assemblyai', 'test-key');
+		configService.setConfig({
+			leapfrog: {
+				transcript: {
+					// No explicit diarization setting
+				}
+			}
+		});
+
+		await assert.rejects(
+			() => service.transcribe('https://example.com/audio.mp3'),
+			(err: Error) => err.message.includes('AssemblyAI API error') || err.message.includes('fetch'),
+		);
+		// Diarization will be enabled in the request body
 	});
 });

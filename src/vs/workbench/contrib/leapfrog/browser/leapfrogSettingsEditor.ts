@@ -23,11 +23,27 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 
 const SYNCING_STATUSES: LeapfrogIndexStatus[] = ['scanning', 'chunking', 'embedding'];
 
+type SettingsSection = 'general' | 'indexing';
+
+interface NavItem {
+	id: SettingsSection;
+	label: string;
+	icon: ThemeIcon;
+}
+
+const NAV_ITEMS: NavItem[] = [
+	{ id: 'general', label: 'General', icon: Codicon.settingsGear },
+	{ id: 'indexing', label: 'Indexing & Docs', icon: Codicon.package },
+];
+
 export class LeapfrogSettingsEditor extends EditorPane {
 
 	static readonly ID: string = 'leapfrog.editor.settings';
 
 	private container: HTMLElement | undefined;
+	private sidebar: HTMLElement | undefined;
+	private mainContent: HTMLElement | undefined;
+	private activeSection: SettingsSection = 'indexing';
 	private preferencesService: ILeapfrogIndexPreferencesService | undefined;
 	private indexService: ILeapfrogIndexService | undefined;
 	private indexableFiles: IIndexableFile[] = [];
@@ -124,7 +140,57 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		this.stopDotsAnimation();
 		clearNode(this.container);
 
-		const content = append(this.container, $('div.indexing-panel'));
+		const layout = append(this.container, $('div.leapfrog-settings-layout'));
+
+		// Sidebar
+		this.sidebar = append(layout, $('div.leapfrog-settings-sidebar'));
+		this.renderSidebar(this.sidebar);
+
+		// Main content
+		this.mainContent = append(layout, $('div.leapfrog-settings-main'));
+		this.renderMainContent(this.mainContent);
+	}
+
+	private renderSidebar(sidebar: HTMLElement): void {
+		// User profile section
+		const profileSection = append(sidebar, $('div.leapfrog-settings-profile'));
+		const avatar = append(profileSection, $('div.leapfrog-settings-avatar'));
+		avatar.textContent = 'J';
+		append(profileSection, $('div', { className: 'leapfrog-settings-email' }, 'user@example.com'));
+		append(profileSection, $('div', { className: 'leapfrog-settings-plan' }, nls.localize('leapfrogSettingsProPlan', 'Pro Plan')));
+
+		// Search bar
+		const searchContainer = append(sidebar, $('div.leapfrog-settings-search-container'));
+		append(searchContainer, $('span', { className: 'codicon leapfrog-settings-search-icon ' + ThemeIcon.asClassName(Codicon.search) }));
+		append(searchContainer, $('input', {
+			type: 'text',
+			className: 'leapfrog-settings-search',
+			placeholder: nls.localize('leapfrogSettingsSearchPlaceholder', 'Search settings Ctrl+F')
+		}));
+
+		// Nav items
+		const navList = append(sidebar, $('div.leapfrog-settings-nav'));
+		for (const item of NAV_ITEMS) {
+			const navItem = append(navList, $('div.leapfrog-settings-nav-item', {
+				'data-section': item.id,
+				class: this.activeSection === item.id ? 'active' : ''
+			}));
+			navItem.onclick = () => {
+				this.activeSection = item.id;
+				this.render();
+			};
+			append(navItem, $('span', { className: 'codicon ' + ThemeIcon.asClassName(item.icon) }));
+			append(navItem, $('span', { className: 'leapfrog-settings-nav-label' }, item.label));
+		}
+	}
+
+	private renderMainContent(mainContent: HTMLElement): void {
+		if (this.activeSection === 'general') {
+			append(mainContent, $('div.leapfrog-settings-placeholder', {}, nls.localize('leapfrogSettingsGeneralComingSoon', 'General settings coming soon.')));
+			return;
+		}
+
+		const content = append(mainContent, $('div.indexing-panel'));
 
 		// Header
 		const header = append(content, $('header'));
@@ -187,7 +253,7 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		const fileCount = stats.total;
 		append(progressBlock, $('p', { className: 'file-count' }, fileCount.toLocaleString() + ' ' + nls.localize('leapfrogSettingsFiles', 'files')));
 
-		const actionsRow = append(cardContent, $('div.flex.items-center.justify-center.gap-3.pt-1'));
+		const actionsRow = append(cardContent, $('div.flex.items-center.justify-end.gap-3.pt-1'));
 		const syncBtn = append(actionsRow, $('button.settings-button.outline.sm', {})) as HTMLButtonElement;
 		syncBtn.disabled = !!isSyncing;
 		const syncIcon = append(syncBtn, $('span'));
@@ -215,9 +281,11 @@ export class LeapfrogSettingsEditor extends EditorPane {
 		const indexNewFolders = config?.autoIndex !== false;
 
 		const switchContainer = append(cardContent, $('div.settings-switch-container'));
-		const checkbox = append(switchContainer, $('input.settings-checkbox', { type: 'checkbox' })) as HTMLInputElement;
+		const checkbox = append(switchContainer, $('input.settings-checkbox', { type: 'checkbox', id: 'leapfrog-auto-index' })) as HTMLInputElement;
 		checkbox.checked = indexNewFolders;
 		checkbox.onchange = () => this.saveAutoIndex(checkbox.checked);
+		const toggleTrack = append(switchContainer, $('label.settings-toggle-track', { for: 'leapfrog-auto-index' }));
+		append(toggleTrack, $('span.settings-toggle-knob'));
 	}
 
 	private renderCursorignoreCard(parent: HTMLElement): void {

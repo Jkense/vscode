@@ -154,6 +154,27 @@ export class LeapfrogIndexJsonDatabase extends Disposable {
 		this.scheduleSave();
 	}
 
+	/**
+	 * Atomically set file hash and chunks together.
+	 * Ensures hash and chunks are always in sync.
+	 */
+	setFileHashAndChunks(filePath: string, hash: string, chunks: IIndexedChunkRow[]): void {
+		// Remove old chunks and embeddings for this file first
+		this.removeChunksForFile(filePath);
+
+		// Insert new chunks
+		this.data.chunks.push(...chunks);
+
+		// Set file hash
+		this.data.file_hashes[filePath] = {
+			hash,
+			modified_at: new Date().toISOString(),
+			chunk_count: chunks.length,
+		};
+
+		this.scheduleSave();
+	}
+
 	// -----------------------------------------------------------------------
 	// Chunk CRUD
 	// -----------------------------------------------------------------------

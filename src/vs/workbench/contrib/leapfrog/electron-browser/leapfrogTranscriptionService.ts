@@ -19,6 +19,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import {
 	ILeapfrogTranscriptionService,
@@ -57,6 +58,7 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	constructor(
 		@ILogService private readonly logService: ILogService,
 		@ISecretStorageService private readonly secretStorageService: ISecretStorageService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this.logService.info('[Leapfrog] Transcription Service initialized');
@@ -69,21 +71,33 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	async transcribe(filePath: string, options?: ILeapfrogTranscriptionOptions): Promise<ILeapfrogTranscript> {
 		const apiKey = await this.getApiKey();
 
+		// Merge provided options with configuration defaults
+		const mergedOptions = this.mergeWithConfigurationDefaults(options);
+
 		const body: Record<string, unknown> = {
 			audio_url: filePath,
-			speaker_labels: options?.diarization !== false,
-			language_detection: !options?.language,
-			sentiment_analysis: true,
+			// Speaker diarization is ALWAYS enabled
+			speaker_labels: true,
+			language_detection: mergedOptions.language === 'auto' || mergedOptions.languageDetection,
+			punctuate: mergedOptions.punctuate,
+			format_text: mergedOptions.formatText,
+			sentiment_analysis: mergedOptions.sentimentAnalysis,
+			entity_detection: mergedOptions.entityDetection,
+			auto_chapters: mergedOptions.autoChapters,
+			auto_highlights: mergedOptions.autoHighlights,
+			disfluencies: mergedOptions.disfluencies,
+			filter_profanity: mergedOptions.filterProfanity,
 		};
 
-		if (options?.language) {
-			body.language_code = options.language;
+		// Set specific language if not auto
+		if (mergedOptions.language && mergedOptions.language !== 'auto') {
+			body.language_code = this.normalizeLanguage(mergedOptions.language);
 		}
 
 		const response = await this.request<RawTranscript>('POST', '/transcript', body, apiKey);
 
 		const transcript = this.mapRaw(response);
-		this.logService.info('[Leapfrog] Transcription submitted:', transcript.id);
+		this.logService.info('[Leapfrog] Transcription submitted:', transcript.id, 'with options:', mergedOptions);
 
 		// Start background polling
 		this.pollUntilDone(transcript.id, apiKey);
@@ -116,11 +130,20 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 	// -----------------------------------------------------------------------
 
 	private async getApiKey(): Promise<string> {
+		// First check VS Code secret storage (user-provided key)
 		const key = await this.secretStorageService.get(API_KEY_STORAGE_KEY);
-		if (!key) {
-			throw new Error('AssemblyAI API key not configured. Please set your API key in Leapfrog settings.');
+		if (key) {
+			return key;
 		}
-		return key;
+
+		// Fallback to environment variable (guard against sandboxed renderer where process may be undefined)
+		const env = typeof process !== 'undefined' ? process.env : undefined;
+		const envKey = env?.['ASSEMBLYAI_API_KEY'];
+		if (envKey) {
+			return envKey;
+		}
+
+		throw new Error('AssemblyAI API key not configured. Please set ASSEMBLYAI_API_KEY environment variable or configure it in Leapfrog settings.');
 	}
 
 	private async request<T>(method: string, path: string, body?: Record<string, unknown>, apiKey?: string): Promise<T> {
@@ -280,6 +303,63 @@ export class LeapfrogTranscriptionService extends Disposable implements ILeapfro
 
 	private sleep(ms: number): Promise<void> {
 		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * Merge provided transcription options with configuration defaults.
+	 * Configuration settings act as defaults; provided options override them.
+	 */
+	private mergeWithConfigurationDefaults(provided?: ILeapfrogTranscriptionOptions): ILeapfrogTranscriptionOptions {
+		const config = this.configurationService.getValue('leapfrog') as any;
+		const transcript = config?.transcript ?? {};
+
+		return {
+			// Diarization is ALWAYS true
+			diarization: true,
+
+			// Language settings
+			language: provided?.language ?? this.normalizeLanguage(transcript.language ?? 'auto'),
+			languageDetection: provided?.languageDetection ?? (transcript.language === 'auto' ? true : (transcript.languageDetection ?? true)),
+
+			// Text processing - apply config defaults
+			punctuate: provided?.punctuate ?? (transcript.punctuate ?? true),
+			formatText: provided?.formatText ?? (transcript.formatText ?? true),
+			disfluencies: provided?.disfluencies ?? (transcript.disfluencies ?? false),
+			filterProfanity: provided?.filterProfanity ?? (transcript.filterProfanity ?? false),
+
+			// AI features - apply config defaults
+			sentimentAnalysis: provided?.sentimentAnalysis ?? (transcript.sentimentAnalysis ?? true),
+			entityDetection: provided?.entityDetection ?? (transcript.entityDetection ?? false),
+			autoChapters: provided?.autoChapters ?? (transcript.autoChapters ?? false),
+			autoHighlights: provided?.autoHighlights ?? (transcript.autoHighlights ?? false),
+		};
+	}
+
+	/**
+	 * Normalize language code to AssemblyAI format.
+	 * Maps short codes (e.g., 'en') to full codes (e.g., 'en_us').
+	 */
+	private normalizeLanguage(lang: string | 'auto'): string | 'auto' {
+		if (lang === 'auto') {
+			return 'auto';
+		}
+
+		const mapping: Record<string, string> = {
+			'en': 'en_us',
+			'es': 'es',
+			'fr': 'fr',
+			'de': 'de',
+			'it': 'it',
+			'pt': 'pt',
+			'nl': 'nl',
+			'pl': 'pl',
+			'ru': 'ru',
+			'zh': 'zh',
+			'ja': 'ja',
+			'ko': 'ko',
+		};
+
+		return mapping[lang] ?? lang;
 	}
 }
 

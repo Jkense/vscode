@@ -18,7 +18,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { ICodeEditor, IContentWidget, IContentWidgetPosition, ContentWidgetPositionPreference } from '../../../../editor/browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
-import { IModelDeltaDecoration, TrackedRangeStickiness } from '../../../../editor/common/model.js';
+import { IModelDeltaDecoration, TrackedRangeStickiness, OverviewRulerLane, MinimapPosition } from '../../../../editor/common/model.js';
 import { ModelDecorationOptions } from '../../../../editor/common/model/textModel.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
@@ -70,6 +70,14 @@ class TagColorStyleManager {
 				`.leapfrog-tag-eol-${safeHex} { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; background-color: ${hex}; }`,
 				this.styleElement.sheet.cssRules.length
 			);
+			// Gutter indicators: 4 positions with gaps between them (3px bar + 4px gap = 7px per position)
+			for (let pos = 0; pos < 4; pos++) {
+				const marginLeft = 3 + pos * 7;
+				this.styleElement.sheet?.insertRule(
+					`.leapfrog-tag-gutter-${safeHex}-${pos} { background-color: rgba(${rgb}, 0.7); width: 3px; border-radius: 2px; margin-left: ${marginLeft}px; }`,
+					this.styleElement.sheet.cssRules.length
+				);
+			}
 		}
 
 		return className;
@@ -82,6 +90,16 @@ class TagColorStyleManager {
 		const safeHex = hex.replace('#', '');
 		this.ensureColor(hex); // ensure rules exist
 		return `leapfrog-tag-eol-${safeHex}`;
+	}
+
+	/**
+	 * Return the gutter indicator class for a given color and position (0-3).
+	 */
+	gutterClassName(hex: string, position: number = 0): string {
+		const safeHex = hex.replace('#', '');
+		this.ensureColor(hex); // ensure rules exist
+		const pos = Math.min(Math.max(position, 0), 3); // clamp to 0-3
+		return `leapfrog-tag-gutter-${safeHex}-${pos}`;
 	}
 
 	private hexToRgb(hex: string): string {
@@ -103,16 +121,27 @@ class TagColorStyleManager {
 
 const decorationOptionsCache = new Map<string, ModelDecorationOptions>();
 
-function getDecorationOptions(hex: string, styleManager: TagColorStyleManager): ModelDecorationOptions {
-	let options = decorationOptionsCache.get(hex);
+function getDecorationOptions(hex: string, styleManager: TagColorStyleManager, gutterPosition: number = 0): ModelDecorationOptions {
+	const cacheKey = `${hex}-${gutterPosition}`;
+	let options = decorationOptionsCache.get(cacheKey);
 	if (!options) {
 		const className = styleManager.ensureColor(hex);
+		const gutterClass = styleManager.gutterClassName(hex, gutterPosition);
 		options = ModelDecorationOptions.register({
-			description: `leapfrog-tag-highlight-${hex.replace('#', '')}`,
+			description: `leapfrog-tag-highlight-${hex.replace('#', '')}-${gutterPosition}`,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			className,
+			linesDecorationsClassName: gutterClass,
+			overviewRuler: {
+				color: hex,
+				position: OverviewRulerLane.Left,
+			},
+			minimap: {
+				color: hex,
+				position: MinimapPosition.Inline,
+			},
 		});
-		decorationOptionsCache.set(hex, options);
+		decorationOptionsCache.set(cacheKey, options);
 	}
 	return options;
 }
@@ -833,13 +862,28 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 		// Track which lines have which tags (for EOL indicators)
 		const lineTagMap = new Map<number, { tagName: string; tagColor: string; tagDescription?: string }[]>();
 
+		// Calculate gutter position for each application based on overlapping ranges
+		const appPositions = new Map<string, number>();
+		for (const app of applications) {
+			// Find all applications that overlap with this one
+			const overlappingApps = applications.filter(other => {
+				// Check if ranges overlap
+				return !(app.endOffset <= other.startOffset || other.endOffset <= app.startOffset);
+			});
+			// Sort overlapping apps by ID for consistent ordering
+			const sortedIds = overlappingApps.map(a => a.id).sort();
+			const position = Math.min(sortedIds.indexOf(app.id), 3); // cap at position 3
+			appPositions.set(app.id, position);
+		}
+
 		for (const app of applications) {
 			try {
 				const startPos = model.getPositionAt(app.startOffset);
 				const endPos = model.getPositionAt(app.endOffset);
 				const color = app.tagColor || '#22c55e';
+				const gutterPosition = appPositions.get(app.id) ?? 0;
 
-				// Per-tag-color highlight decoration
+				// Per-tag-color highlight decoration with position-specific gutter
 				newDecorations.push({
 					range: {
 						startLineNumber: startPos.lineNumber,
@@ -847,7 +891,7 @@ class LeapfrogTagDecorationController extends Disposable implements IWorkbenchCo
 						endLineNumber: endPos.lineNumber,
 						endColumn: endPos.column,
 					},
-					options: getDecorationOptions(color, this.styleManager),
+					options: getDecorationOptions(color, this.styleManager, gutterPosition),
 				});
 				appIds.push(app.id);
 

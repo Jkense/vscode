@@ -372,9 +372,33 @@ export const ILeapfrogTagService = createDecorator<ILeapfrogTagService>('leapfro
 /**
  * Options for a transcription request.
  */
+/**
+ * Comprehensive transcription options matching AssemblyAI API parameters.
+ * Diarization and speaker detection are always enabled.
+ */
 export interface ILeapfrogTranscriptionOptions {
-	language?: string;
-	diarization?: boolean;
+	/** Language code (e.g., 'en', 'es') or 'auto' for detection */
+	language?: string | 'auto';
+	/** Enable language detection (ignored if specific language is set) */
+	languageDetection?: boolean;
+	/** Enable speaker diarization (always true, cannot be disabled) */
+	diarization?: true;
+	/** Enable automatic punctuation */
+	punctuate?: boolean;
+	/** Enable text formatting (numbers, times, currency) */
+	formatText?: boolean;
+	/** Analyze sentiment of segments */
+	sentimentAnalysis?: boolean;
+	/** Detect named entities (people, places, organizations) */
+	entityDetection?: boolean;
+	/** Generate chapters from transcript structure */
+	autoChapters?: boolean;
+	/** Detect key phrases and highlights */
+	autoHighlights?: boolean;
+	/** Include filler words (um, uh, etc.) */
+	disfluencies?: boolean;
+	/** Filter profanity from text */
+	filterProfanity?: boolean;
 }
 
 /**

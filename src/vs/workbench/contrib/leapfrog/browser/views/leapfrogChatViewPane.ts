@@ -273,12 +273,54 @@ export class LeapfrogChatViewPane extends ViewPane {
 	}
 
 	private renderTabBar(container: HTMLElement): void {
-		this.tabBar = this._register(new ActionBar(container, {
+		// Tab bar with tabs on left and actions on right
+		const tabsContainer = append(container, $('div.chat-tabs'));
+		this.tabBar = this._register(new ActionBar(tabsContainer, {
 			orientation: ActionsOrientation.HORIZONTAL,
 			ariaLabel: nls.localize('chatTabsLabel', 'Chat Sessions'),
 			ariaRole: 'tablist',
 			focusOnlyEnabledItems: true
 		}));
+
+		// Action buttons container on the right
+		const actionsContainer = append(container, $('div.chat-actions'));
+		const actionsBar = this._register(new ActionBar(actionsContainer, {
+			orientation: ActionsOrientation.HORIZONTAL,
+			ariaLabel: nls.localize('chatActionsLabel', 'Chat Actions'),
+			focusOnlyEnabledItems: true
+		}));
+
+		// New chat button
+		const newChatAction = new Action(
+			'new-chat',
+			'',
+			'codicon codicon-add',
+			true,
+			() => this.createNewSession()
+		);
+		newChatAction.tooltip = nls.localize('newChat', 'New Chat');
+
+		// Options menu button
+		const optionsAction = new Action(
+			'chat-options',
+			'',
+			'codicon codicon-ellipsis',
+			true,
+			() => this.showOptionsMenu(actionsContainer)
+		);
+		optionsAction.tooltip = nls.localize('chatOptions', 'Options');
+
+		// Close panel button
+		const closePanelAction = new Action(
+			'close-panel',
+			'',
+			'codicon codicon-close',
+			true,
+			() => this.closeChatPanel()
+		);
+		closePanelAction.tooltip = nls.localize('closePanel', 'Close');
+
+		actionsBar.push([newChatAction, optionsAction, closePanelAction]);
 	}
 
 	private async initializeSessionsWithRetry(attempt: number = 0, maxAttempts: number = 10): Promise<void> {
@@ -346,27 +388,7 @@ export class LeapfrogChatViewPane extends ViewPane {
 			actions.push(tabAction);
 		}
 
-		// Add "New Session" button
-		const newSessionAction = new Action(
-			'new-session',
-			'+',
-			'chat-tab-new',
-			true,
-			() => this.createNewSession()
-		);
-		actions.push(newSessionAction);
-
-		// Add "Time Back" button (history icon)
-		const timeBackAction = new Action(
-			'time-back',
-			'$(history)',
-			'chat-tab-timeback',
-			true,
-			() => this.showSessionPicker()
-		);
-		actions.push(timeBackAction);
-
-		// Push all actions to tab bar
+		// Push session tabs to tab bar (action buttons are in separate bar)
 		this.tabBar.push(actions);
 	}
 
@@ -502,6 +524,88 @@ export class LeapfrogChatViewPane extends ViewPane {
 
 			await this.refreshTabBar();
 			await this.loadMessages();
+		}
+	}
+
+	private showOptionsMenu(anchor: HTMLElement): void {
+		// Show context menu with options
+		const actions: IAction[] = [
+			new Action(
+				'new-chat',
+				nls.localize('newChat', 'New Chat'),
+				undefined,
+				true,
+				() => this.createNewSession()
+			),
+			new Action(
+				'rename-session',
+				nls.localize('renameSession', 'Rename Current Chat'),
+				undefined,
+				true,
+				() => this.renameCurrentSession()
+			),
+			new Action(
+				'all-sessions',
+				nls.localize('allSessions', 'All Sessions'),
+				undefined,
+				true,
+				() => this.showSessionPicker()
+			),
+			new Action(
+				'clear-session',
+				nls.localize('clearChatSession', 'Clear Current Session'),
+				undefined,
+				true,
+				() => this.clearChat()
+			)
+		];
+
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => actions,
+			onHide: () => {}
+		});
+	}
+
+	private async renameCurrentSession(): Promise<void> {
+		if (!this.currentSessionId) {
+			return;
+		}
+
+		const session = await this.chatHistoryService.getSession(this.currentSessionId);
+		if (!session) {
+			return;
+		}
+
+		// Show quick input for renaming
+		const input = this.quickInputService.createInputBox();
+		input.placeholder = nls.localize('renameChatPlaceholder', 'Enter new chat name');
+		input.value = session.title || '';
+
+		input.onDidAccept(async () => {
+			const newTitle = input.value.trim();
+			if (newTitle && newTitle !== session.title) {
+				try {
+					// Update session title using dedicated method
+					await this.chatHistoryService.setSessionTitle(this.currentSessionId!, newTitle);
+					await this.refreshTabBar();
+					this.logService.info(`[Leapfrog Chat] Renamed session to: ${newTitle}`);
+				} catch (error) {
+					this.logService.error('[Leapfrog Chat] Failed to rename session:', error);
+				}
+			}
+			input.hide();
+		});
+
+		input.onDidHide(() => input.dispose());
+		input.show();
+	}
+
+	private closeChatPanel(): void {
+		// Hide the chat view
+		const viewDescriptorService = this.viewDescriptorService as any;
+		if (viewDescriptorService && viewDescriptorService.hideActiveView) {
+			viewDescriptorService.hideActiveView();
 		}
 	}
 }

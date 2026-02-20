@@ -21,7 +21,7 @@ import { ISecretStorageService } from '../../../../platform/secrets/common/secre
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService } from '../common/leapfrog.js';
+import { ILeapfrogApiKeyService, ILeapfrogTagService, ILeapfrogTranscriptionService, ILeapfrogTranscriptionOptions, ILeapfrogChatHistoryService, ILeapfrogAIService, ILeapfrogIndexService, ILeapfrogIndexPreferencesService } from '../common/leapfrog.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileOperation } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyFileService } from '../../../services/workingCopy/common/workingCopyFileService.js';
@@ -102,7 +102,7 @@ registerSingleton(ILeapfrogIndexPreferencesService, LeapfrogIndexPreferencesServ
 // Transcription Commands
 // ---------------------------------------------------------------------------
 
-CommandsRegistry.registerCommand('leapfrog.transcribe', async (accessor: ServicesAccessor, filePath: string, options?: { language?: string; diarization?: boolean }) => {
+CommandsRegistry.registerCommand('leapfrog.transcribe', async (accessor: ServicesAccessor, filePath: string, options?: ILeapfrogTranscriptionOptions) => {
 	const transcriptionService = accessor.get(ILeapfrogTranscriptionService);
 	const transcript = await transcriptionService.transcribe(filePath, options);
 	return { transcriptId: transcript.id, status: transcript.status };

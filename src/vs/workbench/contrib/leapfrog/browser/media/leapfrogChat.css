@@ -25,71 +25,130 @@
 	flex-direction: row;
 	background-color: var(--vscode-editorGroupHeader-tabsBackground);
 	border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
-	padding: 4px 8px;
-	min-height: 35px;
+	padding: 0;
+	min-height: 30px;
+	height: 30px;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* Tabs section on the left */
+.leapfrog-chat-viewpane .chat-tabs {
+	display: flex;
+	flex-direction: row;
+	flex: 1;
 	overflow-x: auto;
 	overflow-y: hidden;
+	align-items: center;
+	gap: 0;
+	height: 100%;
 }
 
-/* ActionBar inside tab container */
-.leapfrog-chat-viewpane .chat-tabs-container .monaco-action-bar {
+.leapfrog-chat-viewpane .chat-tabs .monaco-action-bar {
 	flex: 1;
+	min-width: 0;
+	height: 100%;
 }
 
-.leapfrog-chat-viewpane .chat-tabs-container .monaco-action-bar .actions-container {
-	gap: 4px;
+.leapfrog-chat-viewpane .chat-tabs .monaco-action-bar .actions-container {
+	gap: 0;
 	display: flex;
 	flex-wrap: nowrap;
+	align-items: stretch;
+	height: 100%;
 }
 
-/* Individual action item in tab bar */
-.leapfrog-chat-viewpane .chat-tabs-container .action-item {
+/* Actions section on the right */
+.leapfrog-chat-viewpane .chat-actions {
+	display: flex;
+	flex-direction: row;
+	flex-shrink: 0;
+	padding: 0 4px;
+	height: 100%;
+	align-items: center;
+	gap: 4px;
+}
+
+.leapfrog-chat-viewpane .chat-actions .monaco-action-bar {
+	flex-shrink: 0;
+	height: 100%;
+}
+
+.leapfrog-chat-viewpane .chat-actions .monaco-action-bar .actions-container {
+	gap: 4px;
+	display: flex;
+	align-items: center;
+	height: 100%;
+}
+
+/* Individual action item in tabs */
+.leapfrog-chat-viewpane .chat-tabs .action-item {
 	display: inline-flex;
 	align-items: center;
 	flex-shrink: 0;
+	height: 100%;
+	padding: 0;
 }
 
 /* Tab label styling */
-.leapfrog-chat-viewpane .chat-tabs-container .action-label {
-	padding: 6px 12px;
-	border-radius: 3px;
-	font-size: 12px;
+.leapfrog-chat-viewpane .chat-tabs .action-label {
+	padding: 0 12px;
+	border-radius: 0;
+	font-size: 11px;
 	cursor: pointer;
 	color: var(--vscode-tab-inactiveForeground);
 	background-color: transparent;
-	transition: background-color 0.1s ease;
+	transition: color 0.1s ease;
 	border-bottom: 2px solid transparent;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	overflow: hidden;
-	max-width: 200px;
+	max-width: 180px;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	border-right: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
 }
 
 /* Active/checked tab */
-.leapfrog-chat-viewpane .chat-tabs-container .action-label.checked {
+.leapfrog-chat-viewpane .chat-tabs .action-label.checked {
 	color: var(--vscode-tab-activeForeground);
 	background-color: var(--vscode-tab-activeBackground);
 	border-bottom: 2px solid var(--vscode-tab-activeBorder);
 }
 
 /* Hover state for tabs */
-.leapfrog-chat-viewpane .chat-tabs-container .action-label:hover:not(.checked) {
-	background-color: var(--vscode-tab-hoverBackground);
+.leapfrog-chat-viewpane .chat-tabs .action-label:hover:not(.checked) {
+	color: var(--vscode-tab-activeForeground);
 }
 
-/* New session button (+) */
-.leapfrog-chat-viewpane .chat-tabs-container .chat-tab-new {
-	padding: 6px 10px;
-	font-size: 16px;
-	font-weight: 600;
-	margin-left: 4px;
-}
-
-/* Time back button (history icon) */
-.leapfrog-chat-viewpane .chat-tabs-container .chat-tab-timeback {
-	padding: 6px 10px;
-	margin-left: auto;
+/* Action buttons styling */
+.leapfrog-chat-viewpane .chat-actions .action-item {
+	display: inline-flex;
+	align-items: center;
 	flex-shrink: 0;
+	height: 100%;
+	padding: 0;
+}
+
+.leapfrog-chat-viewpane .chat-actions .action-label {
+	padding: 4px 6px;
+	border-radius: 2px;
+	cursor: pointer;
+	color: var(--vscode-toolbar-activeBackground);
+	background-color: transparent;
+	transition: background-color 0.1s ease, color 0.1s ease;
+	font-size: 13px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	width: 24px;
+}
+
+.leapfrog-chat-viewpane .chat-actions .action-label:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+	color: var(--vscode-foreground);
 }
 
 /* Chat container */
